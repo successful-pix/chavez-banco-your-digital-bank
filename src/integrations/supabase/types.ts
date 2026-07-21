@@ -14,16 +14,231 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          read: boolean
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          read?: boolean
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          read?: boolean
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          account_number: string
+          account_type: string
+          agencia: string
+          avatar_url: string | null
+          balance: number
+          country: string
+          cpf: string | null
+          created_at: string
+          currency: string
+          date_of_birth: string | null
+          email: string | null
+          face_verified: boolean
+          full_name: string
+          id: string
+          kyc_status: string
+          language: string
+          phone: string | null
+          pix_key: string | null
+          swift: string
+          updated_at: string
+        }
+        Insert: {
+          account_number: string
+          account_type?: string
+          agencia?: string
+          avatar_url?: string | null
+          balance?: number
+          country?: string
+          cpf?: string | null
+          created_at?: string
+          currency?: string
+          date_of_birth?: string | null
+          email?: string | null
+          face_verified?: boolean
+          full_name?: string
+          id: string
+          kyc_status?: string
+          language?: string
+          phone?: string | null
+          pix_key?: string | null
+          swift?: string
+          updated_at?: string
+        }
+        Update: {
+          account_number?: string
+          account_type?: string
+          agencia?: string
+          avatar_url?: string | null
+          balance?: number
+          country?: string
+          cpf?: string | null
+          created_at?: string
+          currency?: string
+          date_of_birth?: string | null
+          email?: string | null
+          face_verified?: boolean
+          full_name?: string
+          id?: string
+          kyc_status?: string
+          language?: string
+          phone?: string | null
+          pix_key?: string | null
+          swift?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      recipients: {
+        Row: {
+          account_number: string | null
+          agencia: string | null
+          bank: string
+          created_at: string
+          id: string
+          name: string
+          pix_key: string | null
+          user_id: string
+        }
+        Insert: {
+          account_number?: string | null
+          agencia?: string | null
+          bank: string
+          created_at?: string
+          id?: string
+          name: string
+          pix_key?: string | null
+          user_id: string
+        }
+        Update: {
+          account_number?: string | null
+          agencia?: string | null
+          bank?: string
+          created_at?: string
+          id?: string
+          name?: string
+          pix_key?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string | null
+          direction: string
+          id: string
+          pix_key: string | null
+          recipient_account: string | null
+          recipient_agencia: string | null
+          recipient_bank: string | null
+          recipient_name: string | null
+          reference: string
+          sender_account: string | null
+          sender_bank: string | null
+          sender_name: string | null
+          status: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description?: string | null
+          direction: string
+          id?: string
+          pix_key?: string | null
+          recipient_account?: string | null
+          recipient_agencia?: string | null
+          recipient_bank?: string | null
+          recipient_name?: string | null
+          reference?: string
+          sender_account?: string | null
+          sender_bank?: string | null
+          sender_name?: string | null
+          status?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          direction?: string
+          id?: string
+          pix_key?: string | null
+          recipient_account?: string | null
+          recipient_agencia?: string | null
+          recipient_bank?: string | null
+          recipient_name?: string | null
+          reference?: string
+          sender_account?: string | null
+          sender_bank?: string | null
+          sender_name?: string | null
+          status?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +365,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
