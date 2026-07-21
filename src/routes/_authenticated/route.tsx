@@ -75,7 +75,6 @@ function Shell() {
                 </Link>
               );
             })}
-          </div>
             {secondary.map(({ to, label, icon: Icon }) => {
               const active = loc.pathname.startsWith(to);
               return (
