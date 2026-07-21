@@ -14,8 +14,8 @@ export const Route = createFileRoute("/")({
         content:
           "Abra sua conta Chavez Banco e tenha PIX, TED, cartões e segurança bancária. 100% digital.",
       },
-      { property: "og:title", content: "Chavez Banco" },
-      { property: "og:description", content: "Banco digital premium do Brasil." },
+      { property: "og:title", content: "Chavez Banco — Banco digital premium do Brasil" },
+      { property: "og:description", content: "Abra sua conta Chavez Banco e tenha PIX, TED, cartões e segurança bancária. 100% digital." },
     ],
   }),
   component: Landing,

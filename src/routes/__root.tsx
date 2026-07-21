@@ -78,17 +78,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Chavez Banco: conta digital brasileira com PIX, TED, cartões e segurança de nível bancário.",
+          "Abra sua conta Chavez Banco e tenha PIX, TED, cartões e segurança bancária. 100% digital.",
       },
       { name: "theme-color", content: "#0B4DBB" },
-      { property: "og:title", content: "Chavez Banco" },
-      { property: "og:description", content: "Banco digital premium do Brasil." },
+      { property: "og:title", content: "Chavez Banco — Banco digital premium do Brasil" },
+      { property: "og:description", content: "Abra sua conta Chavez Banco e tenha PIX, TED, cartões e segurança bancária. 100% digital." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Chavez Banco — Banco digital premium do Brasil" },
+      { name: "twitter:description", content: "Abra sua conta Chavez Banco e tenha PIX, TED, cartões e segurança bancária. 100% digital." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/2e7a5e36-ce82-4445-a8e9-2fccdd07219b" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/2e7a5e36-ce82-4445-a8e9-2fccdd07219b" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
