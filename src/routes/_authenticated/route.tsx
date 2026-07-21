@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
-import { Home, Send, CreditCard, User } from "lucide-react";
+import { Home, Send, CreditCard, User, Bell, MessageSquare, ShieldCheck, Shield } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -19,19 +19,23 @@ function Shell() {
   const { t } = useI18n();
   const loc = useLocation();
   const [fullName, setFullName] = useState<string>("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     (async () => {
       const { data: s } = await supabase.auth.getUser();
       if (!s.user) return;
-      const { data: p } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", s.user.id)
-        .maybeSingle();
+      const [{ data: p }, { data: r }, { count }] = await Promise.all([
+        supabase.from("profiles").select("full_name").eq("id", s.user.id).maybeSingle(),
+        supabase.from("user_roles").select("role").eq("user_id", s.user.id).eq("role", "admin").maybeSingle(),
+        supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", s.user.id).eq("read", false),
+      ]);
       setFullName(p?.full_name || s.user.email || "");
+      setIsAdmin(!!r);
+      setUnread(count ?? 0);
     })();
-  }, []);
+  }, [loc.pathname]);
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -44,6 +48,11 @@ function Shell() {
     { to: "/cards", label: t("nav.cards"), icon: CreditCard },
     { to: "/profile", label: t("nav.profile"), icon: User },
   ];
+  const secondary = [
+    { to: "/kyc", label: "KYC", icon: ShieldCheck },
+    { to: "/support", label: t("nav.support"), icon: MessageSquare },
+  ];
+
 
   return (
     <div className="min-h-screen bg-background pb-24 md:pb-8">
