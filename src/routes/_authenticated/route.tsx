@@ -76,7 +76,46 @@ function Shell() {
               );
             })}
           </div>
+            {secondary.map(({ to, label, icon: Icon }) => {
+              const active = loc.pathname.startsWith(to);
+              return (
+                <Link
+                  key={to}
+                  to={to}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                    active ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </Link>
+              );
+            })}
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                  loc.pathname.startsWith("/admin") ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Shield className="h-4 w-4" />
+                Admin
+              </Link>
+            )}
+          </div>
           <div className="flex items-center gap-2">
+            <Link
+              to="/notifications"
+              className="relative rounded-xl border border-border p-2 hover:bg-accent"
+              title="Notificações"
+            >
+              <Bell className="h-4 w-4" />
+              {unread > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground grid place-items-center">
+                  {unread > 9 ? "9+" : unread}
+                </span>
+              )}
+            </Link>
             <LanguageSwitcher />
             <button
               onClick={signOut}
@@ -89,6 +128,7 @@ function Shell() {
               {fullName}
             </div>
           </div>
+
         </div>
       </header>
 
