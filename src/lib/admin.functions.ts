@@ -99,7 +99,7 @@ export const adminAdjustBalance = createServerFn({ method: "POST" })
     const next = current + delta;
     if (next < 0) throw new Error("Would result in negative balance");
 
-    const insertPayload: Record<string, unknown> = {
+    const insertPayload = {
       user_id: data.userId,
       type: data.type,
       direction: data.direction,
@@ -114,8 +114,8 @@ export const adminAdjustBalance = createServerFn({ method: "POST" })
       recipient_agencia: data.recipient_agencia ?? null,
       pix_key: data.pix_key ?? null,
       status: "completed",
+      ...(data.created_at ? { created_at: data.created_at } : {}),
     };
-    if (data.created_at) insertPayload.created_at = data.created_at;
 
     const { data: tx, error: txErr } = await supabaseAdmin
       .from("transactions")
@@ -123,6 +123,7 @@ export const adminAdjustBalance = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (txErr) throw txErr;
+
 
     await supabaseAdmin.from("profiles").update({ balance: next }).eq("id", data.userId);
     await supabaseAdmin.from("notifications").insert({
