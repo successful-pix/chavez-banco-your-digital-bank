@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
-import { Home, Send, CreditCard, User } from "lucide-react";
+import { Home, Send, CreditCard, User, Bell, MessageSquare, ShieldCheck, Shield } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -19,19 +19,23 @@ function Shell() {
   const { t } = useI18n();
   const loc = useLocation();
   const [fullName, setFullName] = useState<string>("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     (async () => {
       const { data: s } = await supabase.auth.getUser();
       if (!s.user) return;
-      const { data: p } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", s.user.id)
-        .maybeSingle();
+      const [{ data: p }, { data: r }, { count }] = await Promise.all([
+        supabase.from("profiles").select("full_name").eq("id", s.user.id).maybeSingle(),
+        supabase.from("user_roles").select("role").eq("user_id", s.user.id).eq("role", "admin").maybeSingle(),
+        supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", s.user.id).eq("read", false),
+      ]);
       setFullName(p?.full_name || s.user.email || "");
+      setIsAdmin(!!r);
+      setUnread(count ?? 0);
     })();
-  }, []);
+  }, [loc.pathname]);
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -44,6 +48,11 @@ function Shell() {
     { to: "/cards", label: t("nav.cards"), icon: CreditCard },
     { to: "/profile", label: t("nav.profile"), icon: User },
   ];
+  const secondary = [
+    { to: "/kyc", label: "KYC", icon: ShieldCheck },
+    { to: "/support", label: t("nav.support"), icon: MessageSquare },
+  ];
+
 
   return (
     <div className="min-h-screen bg-background pb-24 md:pb-8">
@@ -66,8 +75,46 @@ function Shell() {
                 </Link>
               );
             })}
+            {secondary.map(({ to, label, icon: Icon }) => {
+              const active = loc.pathname.startsWith(to);
+              return (
+                <Link
+                  key={to}
+                  to={to}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                    active ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </Link>
+              );
+            })}
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                  loc.pathname.startsWith("/admin") ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Shield className="h-4 w-4" />
+                Admin
+              </Link>
+            )}
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              to="/notifications"
+              className="relative rounded-xl border border-border p-2 hover:bg-accent"
+              title="Notificações"
+            >
+              <Bell className="h-4 w-4" />
+              {unread > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground grid place-items-center">
+                  {unread > 9 ? "9+" : unread}
+                </span>
+              )}
+            </Link>
             <LanguageSwitcher />
             <button
               onClick={signOut}
@@ -80,6 +127,7 @@ function Shell() {
               {fullName}
             </div>
           </div>
+
         </div>
       </header>
 
