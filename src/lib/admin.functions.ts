@@ -60,6 +60,18 @@ export const adminSetKycStatus = createServerFn({ method: "POST" })
     } else if (data.status === "rejected") {
       await supabaseAdmin.from("profiles").update({ kyc_status: "rejected" }).eq("id", data.userId);
     }
+    await supabaseAdmin.from("notifications").insert({
+      user_id: data.userId,
+      title: `KYC ${data.status}`,
+      body: data.notes ?? `Sua verificação foi ${data.status}.`,
+    });
+    try {
+      const { data: p } = await supabaseAdmin.from("profiles").select("email, full_name").eq("id", data.userId).maybeSingle();
+      if (p?.email) {
+        const { emails } = await import("@/lib/email.server");
+        await emails.kycStatus(p.email, p.full_name ?? "", data.status, data.notes ?? null);
+      }
+    } catch (e) { console.error("[email] kyc", e); }
     return { ok: true };
   });
 
@@ -89,7 +101,7 @@ export const adminAdjustBalance = createServerFn({ method: "POST" })
 
     const { data: profile, error: perr } = await supabaseAdmin
       .from("profiles")
-      .select("balance, full_name, account_number")
+      .select("balance, full_name, account_number, email")
       .eq("id", data.userId)
       .maybeSingle();
     if (perr || !profile) throw new Error("User not found");
@@ -132,6 +144,17 @@ export const adminAdjustBalance = createServerFn({ method: "POST" })
       body: `${data.direction === "in" ? "+" : "−"} R$ ${data.amount.toFixed(2)} — ${data.description ?? data.type}`,
     });
 
+    try {
+      const { emails } = await import("@/lib/email.server");
+      if ((profile as any).email) {
+        if (data.direction === "in") {
+          await emails.deposit((profile as any).email, profile.full_name ?? "", data.amount, data.description ?? null);
+        } else {
+          await emails.withdrawal((profile as any).email, profile.full_name ?? "", data.amount, data.description ?? null);
+        }
+      }
+    } catch (e) { console.error("[email] adjust", e); }
+
     return { ok: true, transactionId: tx.id, newBalance: next };
   });
 
@@ -152,6 +175,8 @@ export const adminReplySupport = createServerFn({ method: "POST" })
       from_admin: true,
       subject: data.subject ?? null,
       body: data.body,
+      status: "open",
+      read_by_admin: true,
     });
     if (error) throw error;
     await supabaseAdmin.from("notifications").insert({
@@ -159,6 +184,86 @@ export const adminReplySupport = createServerFn({ method: "POST" })
       title: "Nova mensagem do suporte",
       body: data.body.slice(0, 140),
     });
+    try {
+      const { data: p } = await supabaseAdmin.from("profiles").select("email, full_name").eq("id", data.userId).maybeSingle();
+      if (p?.email) {
+        const { emails } = await import("@/lib/email.server");
+        await emails.supportReply(p.email, p.full_name ?? "", data.body);
+      }
+    } catch (e) { console.error("[email] support reply", e); }
+    return { ok: true };
+  });
+
+// --- Role management ---
+export const adminGrantRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ userId: z.string().uuid(), role: z.enum(["admin", "user"]) }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await assertAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("user_roles")
+      .upsert({ user_id: data.userId, role: data.role }, { onConflict: "user_id,role" });
+    if (error) throw error;
+    await supabaseAdmin.from("notifications").insert({
+      user_id: data.userId,
+      title: data.role === "admin" ? "Você é agora administrador" : "Papel atualizado",
+      body: data.role === "admin" ? "Acesse o painel admin ao fazer login novamente." : "Seu papel foi atualizado.",
+    });
+    return { ok: true };
+  });
+
+export const adminRevokeRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ userId: z.string().uuid(), role: z.enum(["admin", "user"]) }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await assertAdmin(context.supabase, context.userId);
+    if (data.userId === context.userId && data.role === "admin") {
+      throw new Error("Você não pode revogar seu próprio acesso admin.");
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", data.userId)
+      .eq("role", data.role);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+export const adminListRoles = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.from("user_roles").select("user_id, role");
+    if (error) throw error;
+    return data;
+  });
+
+// --- Support ticket controls ---
+export const adminSetTicketStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      userId: z.string().uuid(),
+      status: z.enum(["open", "pending", "closed"]).optional(),
+      priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await assertAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const patch: any = {};
+    if (data.status) patch.status = data.status;
+    if (data.priority) patch.priority = data.priority;
+    if (Object.keys(patch).length === 0) return { ok: true };
+    const { error } = await supabaseAdmin.from("support_messages").update(patch).eq("user_id", data.userId);
+    if (error) throw error;
     return { ok: true };
   });
 
@@ -169,9 +274,9 @@ export const adminListSupport = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin
       .from("support_messages")
-      .select("id, user_id, from_admin, subject, body, created_at")
+      .select("id, user_id, from_admin, subject, body, image_url, status, priority, read_by_admin, created_at")
       .order("created_at", { ascending: false })
-      .limit(200);
+      .limit(500);
     if (error) throw error;
     return data;
   });

@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/logo";
@@ -7,6 +8,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
 import { SmileVerify } from "@/components/smile-verify";
 import { useToast } from "@/components/toast";
+import { notifyWelcome, notifyLogin } from "@/lib/user.functions";
 
 const searchSchema = z.object({
   mode: z.enum(["signin", "signup"]).optional().default("signin"),
@@ -87,6 +89,7 @@ function SignIn() {
   const { t } = useI18n();
   const nav = useNavigate();
   const toast = useToast();
+  const doLoginEmail = useServerFn(notifyLogin);
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [loading, setLoading] = useState(false);
@@ -101,8 +104,10 @@ function SignIn() {
       return;
     }
     toast.push("success", "Bem-vindo!");
+    doLoginEmail().catch(() => {});
     nav({ to: "/dashboard" });
   }
+
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -127,6 +132,7 @@ function SignUp() {
   const { t } = useI18n();
   const nav = useNavigate();
   const toast = useToast();
+  const doWelcome = useServerFn(notifyWelcome);
   const [step, setStep] = useState<"form" | "face" | "done">("form");
   const [data, setData] = useState({
     full_name: "",
@@ -190,6 +196,7 @@ function SignUp() {
     setLoading(false);
     if (signUp.session) {
       toast.push("success", "Conta criada!");
+      doWelcome().catch(() => {});
       nav({ to: "/dashboard" });
     } else {
       setStep("done");

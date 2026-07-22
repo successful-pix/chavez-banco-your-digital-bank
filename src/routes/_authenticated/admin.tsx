@@ -8,6 +8,10 @@ import {
   adminAdjustBalance,
   adminListSupport,
   adminReplySupport,
+  adminGrantRole,
+  adminRevokeRole,
+  adminListRoles,
+  adminSetTicketStatus,
   meIsAdmin,
 } from "@/lib/admin.functions";
 import { formatBRL } from "@/lib/currency";
@@ -82,12 +86,22 @@ type UserRow = {
 
 function UsersTab() {
   const listUsers = useServerFn(adminListUsers);
+  const listRoles = useServerFn(adminListRoles);
+  const grantRole = useServerFn(adminGrantRole);
+  const revokeRole = useServerFn(adminRevokeRole);
+  const toast = useToast();
   const [rows, setRows] = useState<UserRow[]>([]);
+  const [admins, setAdmins] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
 
-  useEffect(() => {
-    listUsers().then((d) => setRows(d as unknown as UserRow[])).catch(() => {});
-  }, [listUsers]);
+  async function refresh() {
+    const [u, r] = await Promise.all([listUsers(), listRoles()]);
+    setRows(u as unknown as UserRow[]);
+    setAdmins(new Set((r as any[]).filter((x) => x.role === "admin").map((x) => x.user_id)));
+  }
+
+  useEffect(() => { refresh().catch(() => {}); }, []);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -96,6 +110,21 @@ function UsersTab() {
       [r.full_name, r.email, r.cpf, r.account_number].filter(Boolean).some((v) => String(v).toLowerCase().includes(term)),
     );
   }, [rows, q]);
+
+  async function toggleAdmin(u: UserRow) {
+    const isAdmin = admins.has(u.id);
+    if (!confirm(isAdmin ? `Revogar acesso admin de ${u.full_name}?` : `Conceder acesso admin a ${u.full_name}?`)) return;
+    setBusy(u.id);
+    try {
+      if (isAdmin) await revokeRole({ data: { userId: u.id, role: "admin" } });
+      else await grantRole({ data: { userId: u.id, role: "admin" } });
+      toast.push("success", isAdmin ? "Admin revogado" : "Admin concedido");
+      await refresh();
+    } catch (e: any) {
+      toast.push("error", e.message);
+    }
+    setBusy(null);
+  }
 
   return (
     <div className="space-y-3">
@@ -117,27 +146,48 @@ function UsersTab() {
               <th className="px-4 py-3 text-left">Conta</th>
               <th className="px-4 py-3 text-right">Saldo</th>
               <th className="px-4 py-3 text-left">KYC</th>
+              <th className="px-4 py-3 text-left">Papel</th>
+              <th className="px-4 py-3 text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {filtered.map((r) => (
-              <tr key={r.id}>
-                <td className="px-4 py-3 font-semibold">{r.full_name || "—"}</td>
-                <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
-                <td className="px-4 py-3 text-muted-foreground">{r.agencia} / {r.account_number}</td>
-                <td className="px-4 py-3 text-right font-bold">{formatBRL(Number(r.balance))}</td>
-                <td className="px-4 py-3">
-                  <span className={`text-xs font-semibold ${
-                    r.kyc_status === "approved" ? "text-success" :
-                    r.kyc_status === "rejected" ? "text-destructive" : "text-primary"
-                  }`}>
-                    {r.kyc_status}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {filtered.map((r) => {
+              const isAdmin = admins.has(r.id);
+              return (
+                <tr key={r.id}>
+                  <td className="px-4 py-3 font-semibold">{r.full_name || "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{r.agencia} / {r.account_number}</td>
+                  <td className="px-4 py-3 text-right font-bold">{formatBRL(Number(r.balance))}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs font-semibold ${
+                      r.kyc_status === "approved" ? "text-success" :
+                      r.kyc_status === "rejected" ? "text-destructive" : "text-primary"
+                    }`}>
+                      {r.kyc_status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs font-bold px-2 py-1 rounded-lg ${isAdmin ? "bg-gradient-gold text-primary-foreground" : "bg-accent text-muted-foreground"}`}>
+                      {isAdmin ? "ADMIN" : "user"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => toggleAdmin(r)}
+                      disabled={busy === r.id}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition disabled:opacity-60 ${
+                        isAdmin ? "bg-destructive text-destructive-foreground" : "bg-gradient-primary text-primary-foreground"
+                      }`}
+                    >
+                      {busy === r.id ? "..." : isAdmin ? "Revogar admin" : "Tornar admin"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
             {filtered.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">Nenhum usuário encontrado.</td></tr>
+              <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">Nenhum usuário encontrado.</td></tr>
             )}
           </tbody>
         </table>
@@ -366,10 +416,12 @@ function CreditTab() {
 function SupportTab() {
   const listSupport = useServerFn(adminListSupport);
   const reply = useServerFn(adminReplySupport);
+  const setTicketStatus = useServerFn(adminSetTicketStatus);
   const toast = useToast();
   const [rows, setRows] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [text, setText] = useState("");
+  const [q, setQ] = useState("");
 
   async function refresh() {
     const d = await listSupport();
@@ -383,8 +435,14 @@ function SupportTab() {
       if (!m.has(r.user_id)) m.set(r.user_id, []);
       m.get(r.user_id)!.push(r);
     }
-    return Array.from(m.entries());
-  }, [rows]);
+    const term = q.trim().toLowerCase();
+    const list = Array.from(m.entries());
+    if (!term) return list;
+    return list.filter(([uid, msgs]) =>
+      uid.toLowerCase().includes(term) ||
+      msgs.some((mm: any) => (mm.body ?? "").toLowerCase().includes(term)),
+    );
+  }, [rows, q]);
 
   async function send() {
     if (!selected || !text.trim()) return;
@@ -398,32 +456,95 @@ function SupportTab() {
     }
   }
 
+  async function setStatus(status: "open" | "pending" | "closed") {
+    if (!selected) return;
+    try {
+      await setTicketStatus({ data: { userId: selected, status } });
+      toast.push("success", `Ticket ${status}`);
+      refresh();
+    } catch (e: any) { toast.push("error", e.message); }
+  }
+
+  async function setPriority(priority: "low" | "normal" | "high" | "urgent") {
+    if (!selected) return;
+    try {
+      await setTicketStatus({ data: { userId: selected, priority } });
+      toast.push("success", `Prioridade: ${priority}`);
+      refresh();
+    } catch (e: any) { toast.push("error", e.message); }
+  }
+
   const conv = selected ? rows.filter((r) => r.user_id === selected).sort((a, b) => a.created_at.localeCompare(b.created_at)) : [];
+  const currentTicket = conv[conv.length - 1];
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      <div className="rounded-2xl border bg-card shadow-card divide-y max-h-[70vh] overflow-y-auto">
-        {grouped.length === 0 && <p className="p-5 text-sm text-muted-foreground">Nenhuma conversa.</p>}
-        {grouped.map(([uid, list]) => (
-          <button
-            key={uid}
-            onClick={() => setSelected(uid)}
-            className={`w-full text-left p-3 hover:bg-accent ${selected === uid ? "bg-accent" : ""}`}
-          >
-            <div className="text-xs font-mono">{uid.slice(0, 8)}</div>
-            <div className="text-sm truncate">{list[0].body}</div>
-          </button>
-        ))}
+      <div className="rounded-2xl border bg-card shadow-card max-h-[70vh] overflow-y-auto">
+        <div className="p-3 border-b sticky top-0 bg-card">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar tickets..."
+            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+        </div>
+        <div className="divide-y">
+          {grouped.length === 0 && <p className="p-5 text-sm text-muted-foreground">Nenhuma conversa.</p>}
+          {grouped.map(([uid, list]) => {
+            const latest = list[0];
+            return (
+              <button
+                key={uid}
+                onClick={() => setSelected(uid)}
+                className={`w-full text-left p-3 hover:bg-accent transition ${selected === uid ? "bg-accent" : ""}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-mono">{uid.slice(0, 8)}</div>
+                  <div className="flex gap-1">
+                    {latest.priority && latest.priority !== "normal" && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        latest.priority === "urgent" ? "bg-destructive text-destructive-foreground" :
+                        latest.priority === "high" ? "bg-gradient-gold text-primary-foreground" :
+                        "bg-accent"
+                      }`}>{latest.priority}</span>
+                    )}
+                    {latest.status && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        latest.status === "closed" ? "bg-muted text-muted-foreground" :
+                        latest.status === "pending" ? "bg-primary/10 text-primary" :
+                        "bg-success/15 text-success"
+                      }`}>{latest.status}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-sm truncate mt-1">{latest.body}</div>
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="lg:col-span-2 rounded-2xl border bg-card shadow-card p-4 flex flex-col">
         {!selected ? (
           <p className="text-sm text-muted-foreground m-auto">Selecione uma conversa.</p>
         ) : (
           <>
-            <div className="flex-1 overflow-y-auto space-y-2 max-h-[55vh]">
+            <div className="flex flex-wrap items-center gap-2 pb-3 border-b mb-3">
+              <span className="text-xs font-semibold text-muted-foreground">Status:</span>
+              {(["open", "pending", "closed"] as const).map((s) => (
+                <button key={s} onClick={() => setStatus(s)} className={`text-xs font-semibold px-2 py-1 rounded-lg border ${currentTicket?.status === s ? "bg-gradient-primary text-primary-foreground border-transparent" : "hover:bg-accent"}`}>{s}</button>
+              ))}
+              <span className="text-xs font-semibold text-muted-foreground ml-2">Prioridade:</span>
+              {(["low", "normal", "high", "urgent"] as const).map((p) => (
+                <button key={p} onClick={() => setPriority(p)} className={`text-xs font-semibold px-2 py-1 rounded-lg border ${currentTicket?.priority === p ? "bg-gradient-gold text-primary-foreground border-transparent" : "hover:bg-accent"}`}>{p}</button>
+              ))}
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2 max-h-[50vh]">
               {conv.map((m) => (
-                <div key={m.id} className={`flex ${m.from_admin ? "justify-end" : "justify-start"}`}>
+                <div key={m.id} className={`flex ${m.from_admin ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                   <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${m.from_admin ? "bg-gradient-primary text-primary-foreground" : "bg-accent"}`}>
+                    {m.image_url && (
+                      <img src={m.image_url} alt="anexo" className="mb-2 max-h-56 rounded-lg" />
+                    )}
                     <div className="whitespace-pre-wrap">{m.body}</div>
                     <div className={`text-[10px] mt-1 ${m.from_admin ? "text-white/70" : "text-muted-foreground"}`}>
                       {new Date(m.created_at).toLocaleString("pt-BR")}

@@ -182,6 +182,11 @@ export type Database = {
           created_at: string
           from_admin: boolean
           id: string
+          image_url: string | null
+          priority: string
+          read_by_admin: boolean
+          read_by_user: boolean
+          status: string
           subject: string | null
           user_id: string
         }
@@ -190,6 +195,11 @@ export type Database = {
           created_at?: string
           from_admin?: boolean
           id?: string
+          image_url?: string | null
+          priority?: string
+          read_by_admin?: boolean
+          read_by_user?: boolean
+          status?: string
           subject?: string | null
           user_id: string
         }
@@ -198,6 +208,11 @@ export type Database = {
           created_at?: string
           from_admin?: boolean
           id?: string
+          image_url?: string | null
+          priority?: string
+          read_by_admin?: boolean
+          read_by_user?: boolean
+          status?: string
           subject?: string | null
           user_id?: string
         }

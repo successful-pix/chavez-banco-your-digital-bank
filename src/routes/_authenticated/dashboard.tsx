@@ -26,6 +26,7 @@ type Profile = {
   account_type: string;
   country: string;
   currency: string;
+  avatar_url: string | null;
 };
 
 type Tx = {
@@ -45,6 +46,7 @@ function Dashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [txs, setTxs] = useState<Tx[]>([]);
   const [hidden, setHidden] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -54,10 +56,23 @@ function Dashboard() {
         supabase.from("profiles").select("*").eq("id", s.user.id).maybeSingle(),
         supabase.from("transactions").select("*").eq("user_id", s.user.id).order("created_at", { ascending: false }).limit(8),
       ]);
-      if (p) setProfile(p as unknown as Profile);
+      if (p) {
+        setProfile(p as unknown as Profile);
+        if ((p as any).avatar_url) {
+          const { data: signed } = await supabase.storage.from("avatars").createSignedUrl((p as any).avatar_url, 3600);
+          setAvatarUrl(signed?.signedUrl ?? null);
+        }
+      }
       if (tx) setTxs(tx as unknown as Tx[]);
     })();
   }, []);
+
+  function greet() {
+    const h = new Date().getHours();
+    if (h < 12) return lang === "en" ? "Good morning" : "Bom dia";
+    if (h < 18) return lang === "en" ? "Good afternoon" : "Boa tarde";
+    return lang === "en" ? "Good evening" : "Boa noite";
+  }
 
   function copy(text: string) {
     navigator.clipboard.writeText(text);
@@ -69,24 +84,38 @@ function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-500">
       {/* Greeting */}
-      <div>
-        <p className="text-sm text-muted-foreground">{t("dashboard.hello")},</p>
-        <h1 className="text-2xl font-black tracking-tight text-foreground">{profile.full_name || "—"}</h1>
+      <div className="flex items-center gap-3">
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover ring-2 ring-primary/20 shadow-card" />
+        ) : (
+          <div className="h-12 w-12 rounded-full bg-gradient-primary text-primary-foreground grid place-items-center font-black text-lg shadow-card">
+            {(profile.full_name || "?").charAt(0)}
+          </div>
+        )}
+        <div>
+          <p className="text-sm text-muted-foreground">{greet()},</p>
+          <h1 className="text-xl font-black tracking-tight text-foreground">{profile.full_name || "—"}</h1>
+        </div>
       </div>
 
       {/* Balance card */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-primary p-6 shadow-elevated text-primary-foreground">
-        <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
-        <div className="absolute right-6 top-6 h-6 w-10 rounded bg-gradient-gold" />
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-primary p-6 shadow-elevated text-primary-foreground ring-1 ring-white/10 transition hover:shadow-2xl">
+        <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/15 blur-2xl" />
+        <div className="absolute -left-20 -bottom-20 h-56 w-56 rounded-full bg-black/20 blur-2xl" />
+        <div className="absolute right-6 top-6 h-6 w-10 rounded bg-gradient-gold shadow-lg" />
         <div className="flex items-center justify-between">
           <span className="text-xs uppercase tracking-widest text-white/80">{t("dashboard.balance")}</span>
-          <button onClick={() => setHidden((h) => !h)} className="rounded-lg p-1.5 hover:bg-white/10">
+          <button
+            onClick={() => setHidden((h) => !h)}
+            className="rounded-lg p-1.5 hover:bg-white/15 transition"
+            title={hidden ? "Mostrar saldo" : "Ocultar saldo"}
+          >
             {hidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
           </button>
         </div>
-        <div className="mt-2 text-4xl font-black tracking-tight">
+        <div className="mt-2 text-4xl font-black tracking-tight transition-all">
           {hidden ? "••••••" : formatBRL(profile.balance)}
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3 text-xs">
@@ -111,9 +140,9 @@ function Dashboard() {
             key={label}
             to={to as "/transfer" | "/cards"}
             search={search as never}
-            className="rounded-2xl border bg-card shadow-card p-3 flex flex-col items-center justify-center gap-1.5 hover:border-primary/30 hover:shadow-elevated transition"
+            className="group rounded-2xl border bg-gradient-to-br from-card to-accent/40 shadow-card p-3 flex flex-col items-center justify-center gap-1.5 hover:border-primary/50 hover:shadow-elevated hover:-translate-y-0.5 active:scale-95 transition-all"
           >
-            <div className="h-9 w-9 rounded-xl bg-accent grid place-items-center text-primary">
+            <div className="h-10 w-10 rounded-xl bg-gradient-primary/10 grid place-items-center text-primary group-hover:bg-gradient-primary group-hover:text-primary-foreground transition-all">
               <Icon className="h-4 w-4" />
             </div>
             <span className="text-[11px] font-semibold text-foreground">{label}</span>
@@ -123,7 +152,7 @@ function Dashboard() {
 
       {/* Recent tx */}
       <div className="rounded-2xl border bg-card shadow-card">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
+        <div className="flex items-center justify-between px-5 py-3 border-b">
           <h2 className="font-bold text-foreground">{t("dashboard.recent")}</h2>
         </div>
         {txs.length === 0 ? (
@@ -135,7 +164,7 @@ function Dashboard() {
                 <Link
                   to="/receipt/$id"
                   params={{ id: tx.id }}
-                  className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-accent/50 transition"
+                  className="flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-accent/50 transition"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
