@@ -1,10 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useI18n } from "@/lib/i18n";
 import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/components/toast";
+import { notifyTransfer } from "@/lib/user.functions";
 
 const searchSchema = z.object({
   type: z.enum(["pix", "ted", "doc", "internal"]).optional().default("pix"),
@@ -28,6 +30,7 @@ function TransferPage() {
   const { t } = useI18n();
   const nav = useNavigate();
   const toast = useToast();
+  const doTransferEmail = useServerFn(notifyTransfer);
 
   const [type, setType] = useState<TxType>(initialType);
   const [balance, setBalance] = useState(0);
@@ -99,6 +102,7 @@ function TransferPage() {
 
     setSaving(false);
     toast.push("success", t("transfer.success"));
+    doTransferEmail({ data: { amount, kind: type, recipient: form.recipient_name || form.pix_key || undefined } }).catch(() => {});
     nav({ to: "/receipt/$id", params: { id: tx.id } });
   }
 
