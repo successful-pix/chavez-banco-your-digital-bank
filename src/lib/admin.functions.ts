@@ -262,9 +262,9 @@ export const adminListSupport = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin
       .from("support_messages")
-      .select("id, user_id, from_admin, subject, body, created_at")
+      .select("id, user_id, from_admin, subject, body, image_url, status, priority, read_by_admin, created_at")
       .order("created_at", { ascending: false })
-      .limit(200);
+      .limit(500);
     if (error) throw error;
     return data;
   });
