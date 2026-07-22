@@ -26,6 +26,7 @@ type Profile = {
   account_type: string;
   country: string;
   currency: string;
+  avatar_url: string | null;
 };
 
 type Tx = {
