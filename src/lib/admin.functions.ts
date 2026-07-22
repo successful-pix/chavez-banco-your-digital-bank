@@ -60,6 +60,18 @@ export const adminSetKycStatus = createServerFn({ method: "POST" })
     } else if (data.status === "rejected") {
       await supabaseAdmin.from("profiles").update({ kyc_status: "rejected" }).eq("id", data.userId);
     }
+    await supabaseAdmin.from("notifications").insert({
+      user_id: data.userId,
+      title: `KYC ${data.status}`,
+      body: data.notes ?? `Sua verificação foi ${data.status}.`,
+    });
+    try {
+      const { data: p } = await supabaseAdmin.from("profiles").select("email, full_name").eq("id", data.userId).maybeSingle();
+      if (p?.email) {
+        const { emails } = await import("@/lib/email.server");
+        await emails.kycStatus(p.email, p.full_name ?? "", data.status, data.notes ?? null);
+      }
+    } catch (e) { console.error("[email] kyc", e); }
     return { ok: true };
   });
 
