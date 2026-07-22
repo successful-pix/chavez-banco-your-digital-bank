@@ -86,12 +86,22 @@ type UserRow = {
 
 function UsersTab() {
   const listUsers = useServerFn(adminListUsers);
+  const listRoles = useServerFn(adminListRoles);
+  const grantRole = useServerFn(adminGrantRole);
+  const revokeRole = useServerFn(adminRevokeRole);
+  const toast = useToast();
   const [rows, setRows] = useState<UserRow[]>([]);
+  const [admins, setAdmins] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
 
-  useEffect(() => {
-    listUsers().then((d) => setRows(d as unknown as UserRow[])).catch(() => {});
-  }, [listUsers]);
+  async function refresh() {
+    const [u, r] = await Promise.all([listUsers(), listRoles()]);
+    setRows(u as unknown as UserRow[]);
+    setAdmins(new Set((r as any[]).filter((x) => x.role === "admin").map((x) => x.user_id)));
+  }
+
+  useEffect(() => { refresh().catch(() => {}); }, []);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -100,6 +110,21 @@ function UsersTab() {
       [r.full_name, r.email, r.cpf, r.account_number].filter(Boolean).some((v) => String(v).toLowerCase().includes(term)),
     );
   }, [rows, q]);
+
+  async function toggleAdmin(u: UserRow) {
+    const isAdmin = admins.has(u.id);
+    if (!confirm(isAdmin ? `Revogar acesso admin de ${u.full_name}?` : `Conceder acesso admin a ${u.full_name}?`)) return;
+    setBusy(u.id);
+    try {
+      if (isAdmin) await revokeRole({ data: { userId: u.id, role: "admin" } });
+      else await grantRole({ data: { userId: u.id, role: "admin" } });
+      toast.push("success", isAdmin ? "Admin revogado" : "Admin concedido");
+      await refresh();
+    } catch (e: any) {
+      toast.push("error", e.message);
+    }
+    setBusy(null);
+  }
 
   return (
     <div className="space-y-3">
@@ -121,27 +146,48 @@ function UsersTab() {
               <th className="px-4 py-3 text-left">Conta</th>
               <th className="px-4 py-3 text-right">Saldo</th>
               <th className="px-4 py-3 text-left">KYC</th>
+              <th className="px-4 py-3 text-left">Papel</th>
+              <th className="px-4 py-3 text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {filtered.map((r) => (
-              <tr key={r.id}>
-                <td className="px-4 py-3 font-semibold">{r.full_name || "—"}</td>
-                <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
-                <td className="px-4 py-3 text-muted-foreground">{r.agencia} / {r.account_number}</td>
-                <td className="px-4 py-3 text-right font-bold">{formatBRL(Number(r.balance))}</td>
-                <td className="px-4 py-3">
-                  <span className={`text-xs font-semibold ${
-                    r.kyc_status === "approved" ? "text-success" :
-                    r.kyc_status === "rejected" ? "text-destructive" : "text-primary"
-                  }`}>
-                    {r.kyc_status}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {filtered.map((r) => {
+              const isAdmin = admins.has(r.id);
+              return (
+                <tr key={r.id}>
+                  <td className="px-4 py-3 font-semibold">{r.full_name || "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{r.agencia} / {r.account_number}</td>
+                  <td className="px-4 py-3 text-right font-bold">{formatBRL(Number(r.balance))}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs font-semibold ${
+                      r.kyc_status === "approved" ? "text-success" :
+                      r.kyc_status === "rejected" ? "text-destructive" : "text-primary"
+                    }`}>
+                      {r.kyc_status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs font-bold px-2 py-1 rounded-lg ${isAdmin ? "bg-gradient-gold text-primary-foreground" : "bg-accent text-muted-foreground"}`}>
+                      {isAdmin ? "ADMIN" : "user"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => toggleAdmin(r)}
+                      disabled={busy === r.id}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition disabled:opacity-60 ${
+                        isAdmin ? "bg-destructive text-destructive-foreground" : "bg-gradient-primary text-primary-foreground"
+                      }`}
+                    >
+                      {busy === r.id ? "..." : isAdmin ? "Revogar admin" : "Tornar admin"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
             {filtered.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">Nenhum usuário encontrado.</td></tr>
+              <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">Nenhum usuário encontrado.</td></tr>
             )}
           </tbody>
         </table>
