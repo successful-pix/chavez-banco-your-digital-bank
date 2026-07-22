@@ -8,6 +8,10 @@ import {
   adminAdjustBalance,
   adminListSupport,
   adminReplySupport,
+  adminGrantRole,
+  adminRevokeRole,
+  adminListRoles,
+  adminSetTicketStatus,
   meIsAdmin,
 } from "@/lib/admin.functions";
 import { formatBRL } from "@/lib/currency";
