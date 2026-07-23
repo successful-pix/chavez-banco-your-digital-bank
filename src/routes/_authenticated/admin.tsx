@@ -180,11 +180,16 @@ function UsersTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs font-bold px-2 py-1 rounded-lg ${isAdmin ? "bg-gradient-gold text-primary-foreground" : "bg-accent text-muted-foreground"}`}>
-                      {isAdmin ? "ADMIN" : "user"}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${isAdmin ? "bg-gradient-gold text-primary-foreground" : "bg-accent text-muted-foreground"}`}>
+                        {isAdmin ? "ADMIN" : "user"}
+                      </span>
+                      {r.blocked && (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-destructive text-destructive-foreground">BLOQUEADO</span>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                     <button
                       onClick={() => toggleAdmin(r)}
                       disabled={busy === r.id}
@@ -194,7 +199,17 @@ function UsersTab() {
                     >
                       {busy === r.id ? "..." : isAdmin ? "Revogar admin" : "Tornar admin"}
                     </button>
+                    <button
+                      onClick={() => toggleBlock(r)}
+                      disabled={busy === r.id}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition disabled:opacity-60 ${
+                        r.blocked ? "bg-success text-success-foreground" : "bg-destructive/90 text-destructive-foreground"
+                      }`}
+                    >
+                      {r.blocked ? "Desbloquear" : "Bloquear"}
+                    </button>
                   </td>
+
                 </tr>
               );
             })}
