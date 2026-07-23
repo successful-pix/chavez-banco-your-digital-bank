@@ -42,7 +42,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminPage,
 });
 
-type Tab = "users" | "kyc" | "credit" | "support";
+type Tab = "users" | "kyc" | "credit" | "transfers" | "blocked" | "support";
 
 function AdminPage() {
   const [tab, setTab] = useState<Tab>("users");
@@ -50,6 +50,8 @@ function AdminPage() {
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: "users", label: "Usuários", icon: Shield },
     { id: "kyc", label: "KYC", icon: FileCheck },
+    { id: "transfers", label: "Transferências", icon: ArrowLeftRight },
+    { id: "blocked", label: "Bloqueados", icon: Ban },
     { id: "credit", label: "Crédito / Débito", icon: Wallet },
     { id: "support", label: "Suporte", icon: MessageSquare },
   ];
@@ -58,7 +60,7 @@ function AdminPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-black tracking-tight">Painel Administrativo</h1>
-        <p className="text-sm text-muted-foreground">Gestão de usuários, KYC, saldos e suporte.</p>
+        <p className="text-sm text-muted-foreground">Gestão de usuários, KYC, transferências, saldos e suporte.</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -78,11 +80,14 @@ function AdminPage() {
 
       {tab === "users" && <UsersTab />}
       {tab === "kyc" && <KycTab />}
+      {tab === "transfers" && <TransfersTab />}
+      {tab === "blocked" && <BlockedTab />}
       {tab === "credit" && <CreditTab />}
       {tab === "support" && <SupportTab />}
     </div>
   );
 }
+
 
 type UserRow = {
   id: string; full_name: string; email: string | null; phone: string | null;
