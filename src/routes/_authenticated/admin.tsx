@@ -486,11 +486,17 @@ function SupportTab() {
     const term = q.trim().toLowerCase();
     const list = Array.from(m.entries());
     if (!term) return list;
-    return list.filter(([uid, msgs]) =>
-      uid.toLowerCase().includes(term) ||
-      msgs.some((mm: any) => (mm.body ?? "").toLowerCase().includes(term)),
-    );
-  }, [rows, q]);
+    return list.filter(([uid, msgs]) => {
+      const n = names[uid];
+      return (
+        uid.toLowerCase().includes(term) ||
+        (n?.full_name ?? "").toLowerCase().includes(term) ||
+        (n?.email ?? "").toLowerCase().includes(term) ||
+        msgs.some((mm: any) => (mm.body ?? "").toLowerCase().includes(term))
+      );
+    });
+  }, [rows, q, names]);
+
 
   async function send() {
     if (!selected || !text.trim()) return;
