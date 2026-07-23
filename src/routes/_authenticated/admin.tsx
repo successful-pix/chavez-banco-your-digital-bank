@@ -630,3 +630,149 @@ function Input({ label, value, onChange, placeholder, type = "text" }: { label: 
     </label>
   );
 }
+
+// --- Blocked users tab ---
+function BlockedTab() {
+  const listUsers = useServerFn(adminListUsers);
+  const setBlocked = useServerFn(adminSetBlocked);
+  const toast = useToast();
+  const [rows, setRows] = useState<UserRow[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function refresh() {
+    const d = await listUsers();
+    setRows((d as unknown as UserRow[]).filter((r) => r.blocked));
+  }
+  useEffect(() => { refresh().catch(() => {}); }, []);
+
+  async function unblock(u: UserRow) {
+    if (!confirm(`Desbloquear ${u.full_name}?`)) return;
+    setBusy(u.id);
+    try {
+      await setBlocked({ data: { userId: u.id, blocked: false } });
+      toast.push("success", "Usuário desbloqueado");
+      await refresh();
+    } catch (e: any) { toast.push("error", e.message); }
+    setBusy(null);
+  }
+
+  return (
+    <div className="rounded-2xl border bg-card shadow-card divide-y">
+      {rows.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted-foreground">Nenhum usuário bloqueado.</p>}
+      {rows.map((r) => (
+        <div key={r.id} className="p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="font-semibold">{r.full_name || "—"}</div>
+            <div className="text-xs text-muted-foreground">{r.email} • {r.agencia} / {r.account_number}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold px-2 py-1 rounded-lg bg-destructive/15 text-destructive">BLOQUEADO</span>
+            <button
+              onClick={() => unblock(r)}
+              disabled={busy === r.id}
+              className="rounded-xl bg-success text-success-foreground px-3 py-1.5 text-xs font-bold disabled:opacity-60"
+            >
+              {busy === r.id ? "..." : "Desbloquear"}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- Pending transfers approval tab ---
+type PendingTx = {
+  id: string; user_id: string; type: string; direction: "in" | "out"; amount: number;
+  description: string | null; recipient_name: string | null; recipient_bank: string | null;
+  recipient_account: string | null; pix_key: string | null; created_at: string;
+  _sender: { full_name: string | null; email: string | null; balance: number } | null;
+};
+
+function TransfersTab() {
+  const listPending = useServerFn(adminListPendingTransfers);
+  const approve = useServerFn(adminApproveTransfer);
+  const reject = useServerFn(adminRejectTransfer);
+  const toast = useToast();
+  const [rows, setRows] = useState<PendingTx[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function refresh() {
+    const d = await listPending();
+    setRows(d as unknown as PendingTx[]);
+  }
+  useEffect(() => { refresh().catch(() => {}); }, []);
+
+  async function doApprove(tx: PendingTx) {
+    if (!confirm(`Aprovar ${tx.type.toUpperCase()} de ${formatBRL(Number(tx.amount))} para ${tx.recipient_name ?? tx.pix_key ?? "—"}?`)) return;
+    setBusy(tx.id);
+    try {
+      await approve({ data: { transactionId: tx.id } });
+      toast.push("success", "Transferência aprovada");
+      await refresh();
+    } catch (e: any) { toast.push("error", e.message); }
+    setBusy(null);
+  }
+
+  async function doReject(tx: PendingTx) {
+    const reason = prompt("Motivo da rejeição? (opcional)") ?? undefined;
+    setBusy(tx.id);
+    try {
+      await reject({ data: { transactionId: tx.id, reason } });
+      toast.push("success", "Transferência rejeitada");
+      await refresh();
+    } catch (e: any) { toast.push("error", e.message); }
+    setBusy(null);
+  }
+
+  return (
+    <div className="rounded-2xl border bg-card shadow-card divide-y">
+      {rows.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted-foreground">Nenhuma transferência pendente.</p>}
+      {rows.map((tx) => (
+        <div key={tx.id} className="p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-primary/10 text-primary uppercase">{tx.type}</span>
+              <span className="text-xs text-muted-foreground">{new Date(tx.created_at).toLocaleString("pt-BR")}</span>
+            </div>
+            <div className="mt-1 font-semibold">
+              {tx._sender?.full_name ?? tx.user_id.slice(0, 8)}{" "}
+              <span className="text-muted-foreground">→</span>{" "}
+              {tx.recipient_name ?? tx.pix_key ?? "—"}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {tx.recipient_bank ? `${tx.recipient_bank} • ` : ""}
+              {tx.recipient_account ?? tx.pix_key ?? ""}
+              {tx.description ? ` • ${tx.description}` : ""}
+            </div>
+            {tx._sender && (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Saldo atual do remetente: {formatBRL(tx._sender.balance)}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="text-right">
+              <div className="text-lg font-black">{formatBRL(Number(tx.amount))}</div>
+            </div>
+            <button
+              onClick={() => doApprove(tx)}
+              disabled={busy === tx.id}
+              className="rounded-xl bg-success text-success-foreground px-3 py-1.5 text-xs font-bold disabled:opacity-60"
+            >
+              {busy === tx.id ? "..." : "Aprovar"}
+            </button>
+            <button
+              onClick={() => doReject(tx)}
+              disabled={busy === tx.id}
+              className="rounded-xl bg-destructive text-destructive-foreground px-3 py-1.5 text-xs font-bold disabled:opacity-60"
+            >
+              Rejeitar
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
