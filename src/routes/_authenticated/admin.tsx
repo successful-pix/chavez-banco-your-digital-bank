@@ -553,7 +553,11 @@ function SupportTab() {
                 className={`w-full text-left p-3 hover:bg-accent transition ${selected === uid ? "bg-accent" : ""}`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs font-mono">{uid.slice(0, 8)}</div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate">{names[uid]?.full_name ?? "—"}</div>
+                    <div className="text-[10px] font-mono text-muted-foreground truncate">{names[uid]?.email ?? uid.slice(0, 12)}</div>
+                  </div>
+
                   <div className="flex gap-1">
                     {latest.priority && latest.priority !== "normal" && (
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
