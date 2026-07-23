@@ -101,7 +101,9 @@ function UsersTab() {
   const listRoles = useServerFn(adminListRoles);
   const grantRole = useServerFn(adminGrantRole);
   const revokeRole = useServerFn(adminRevokeRole);
+  const setBlocked = useServerFn(adminSetBlocked);
   const toast = useToast();
+
   const [rows, setRows] = useState<UserRow[]>([]);
   const [admins, setAdmins] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
