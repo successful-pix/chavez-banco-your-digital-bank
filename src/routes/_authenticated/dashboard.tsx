@@ -103,6 +103,23 @@ function Dashboard() {
         </div>
       </div>
 
+      {profile.blocked && (
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          <b>Sua conta foi bloqueada.</b> Entre em contato com o Suporte para desbloquear sua conta.
+        </div>
+      )}
+      {!profile.blocked && profile.kyc_status === "pending" && (
+        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm">
+          <b>KYC em análise.</b> Tempo estimado: até 24 horas. Após a aprovação todos os serviços serão liberados.
+        </div>
+      )}
+      {!profile.blocked && profile.kyc_status === "rejected" && (
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          <b>KYC rejeitado.</b> Reenvie seus documentos na página KYC.
+        </div>
+      )}
+
+
       {/* Balance card */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-primary p-6 shadow-elevated text-primary-foreground ring-1 ring-white/10 transition hover:shadow-2xl">
         <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/15 blur-2xl" />
