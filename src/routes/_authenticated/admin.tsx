@@ -459,19 +459,23 @@ function CreditTab() {
 
 function SupportTab() {
   const listSupport = useServerFn(adminListSupport);
+  const listProfiles = useServerFn(adminListSupportProfiles);
   const reply = useServerFn(adminReplySupport);
   const setTicketStatus = useServerFn(adminSetTicketStatus);
   const toast = useToast();
   const [rows, setRows] = useState<any[]>([]);
+  const [names, setNames] = useState<Record<string, { full_name: string | null; email: string | null }>>({});
   const [selected, setSelected] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
 
   async function refresh() {
-    const d = await listSupport();
+    const [d, n] = await Promise.all([listSupport(), listProfiles()]);
     setRows(d as any[]);
+    setNames(n as any);
   }
   useEffect(() => { refresh().catch(() => {}); }, []);
+
 
   const grouped = useMemo(() => {
     const m = new Map<string, any[]>();
