@@ -92,4 +92,25 @@ export const emails = {
     return send(to, `Verificação KYC ${map[status]}`, shell(`KYC ${map[status]}`,
       `<p>Olá <b>${name}</b>,</p><p>Sua verificação de identidade foi <b>${map[status]}</b>.</p>${notes ? `<p>Nota: ${notes}</p>` : ""}`));
   },
+
+  transferPending: (to: string, name: string, amount: number, kind: string, recipient?: string | null) =>
+    send(to, `Transferência ${kind.toUpperCase()} pendente — ${brl(amount)}`, shell("Transferência aguardando aprovação",
+      `<p>Olá <b>${name}</b>,</p><p>Sua transferência <b>${kind.toUpperCase()}</b> de <b>${brl(amount)}</b>${recipient ? ` para <b>${recipient}</b>` : ""} foi registrada e está <b>aguardando aprovação</b>. Você receberá uma nova notificação assim que for processada.</p>`)),
+
+  transferApproved: (to: string, name: string, amount: number, kind: string, recipient?: string | null) =>
+    send(to, `Transferência ${kind.toUpperCase()} aprovada — ${brl(amount)}`, shell("Transferência aprovada",
+      `<p>Olá <b>${name}</b>,</p><p>Sua transferência <b>${kind.toUpperCase()}</b> de <b style="color:#0B4DBB">${brl(amount)}</b>${recipient ? ` para <b>${recipient}</b>` : ""} foi aprovada e concluída.</p>`)),
+
+  transferRejected: (to: string, name: string, amount: number, kind: string, reason?: string | null) =>
+    send(to, `Transferência ${kind.toUpperCase()} rejeitada`, shell("Transferência rejeitada",
+      `<p>Olá <b>${name}</b>,</p><p>Sua transferência <b>${kind.toUpperCase()}</b> de <b>${brl(amount)}</b> foi <b style="color:#b91c1c">rejeitada</b>.</p>${reason ? `<p>Motivo: ${reason}</p>` : ""}`)),
+
+  accountBlocked: (to: string, name: string) =>
+    send(to, "Sua conta foi bloqueada", shell("Conta bloqueada",
+      `<p>Olá <b>${name}</b>,</p><p>Sua conta Chavez Banco foi <b>bloqueada</b>. Entre em contato com o suporte para regularizar sua situação.</p>`)),
+
+  accountUnblocked: (to: string, name: string) =>
+    send(to, "Sua conta foi desbloqueada", shell("Conta desbloqueada",
+      `<p>Olá <b>${name}</b>,</p><p>Sua conta Chavez Banco foi <b>desbloqueada</b>. Você já pode voltar a utilizar todos os serviços.</p>`)),
 };
+
