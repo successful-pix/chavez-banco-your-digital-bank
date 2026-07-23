@@ -27,7 +27,10 @@ type Profile = {
   country: string;
   currency: string;
   avatar_url: string | null;
+  kyc_status: string;
+  blocked: boolean;
 };
+
 
 type Tx = {
   id: string;
