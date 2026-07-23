@@ -34,6 +34,8 @@ function TransferPage() {
 
   const [type, setType] = useState<TxType>(initialType);
   const [balance, setBalance] = useState(0);
+  const [blocked, setBlocked] = useState(false);
+  const [kycStatus, setKycStatus] = useState<string>("pending");
   const [form, setForm] = useState({
     recipient_name: "",
     bank: "",
@@ -49,8 +51,12 @@ function TransferPage() {
     (async () => {
       const { data: s } = await supabase.auth.getUser();
       if (!s.user) return;
-      const { data: p } = await supabase.from("profiles").select("balance").eq("id", s.user.id).maybeSingle();
-      if (p) setBalance(Number(p.balance));
+      const { data: p } = await supabase.from("profiles").select("balance, blocked, kyc_status").eq("id", s.user.id).maybeSingle();
+      if (p) {
+        setBalance(Number(p.balance));
+        setBlocked(!!(p as any).blocked);
+        setKycStatus((p as any).kyc_status ?? "pending");
+      }
     })();
   }, []);
 
@@ -60,6 +66,8 @@ function TransferPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (blocked) return toast.push("error", "Sua conta está bloqueada. Contate o suporte.");
+    if (kycStatus !== "approved") return toast.push("error", "Conclua sua verificação KYC antes de transferir.");
     const amount = Number(form.amount.replace(",", "."));
     if (!isFinite(amount) || amount <= 0) return toast.push("error", "Valor inválido");
     if (amount > balance) return toast.push("error", t("transfer.insufficient"));
@@ -81,7 +89,7 @@ function TransferPage() {
         recipient_agencia: form.agencia || null,
         recipient_account: form.account_number || null,
         pix_key: type === "pix" ? form.pix_key || null : null,
-        status: "completed",
+        status: "pending",
       })
       .select("id")
       .single();
@@ -92,19 +100,18 @@ function TransferPage() {
       return;
     }
 
-    const newBalance = balance - amount;
-    await supabase.from("profiles").update({ balance: newBalance }).eq("id", s.user.id);
     await supabase.from("notifications").insert({
       user_id: s.user.id,
-      title: t("transfer.success"),
-      body: `${form.recipient_name} — ${formatBRL(amount)}`,
+      title: "Transferência pendente de aprovação",
+      body: `${form.recipient_name || form.pix_key} — ${formatBRL(amount)}`,
     });
 
     setSaving(false);
-    toast.push("success", t("transfer.success"));
+    toast.push("success", "Transferência enviada para aprovação");
     doTransferEmail({ data: { amount, kind: type, recipient: form.recipient_name || form.pix_key || undefined } }).catch(() => {});
     nav({ to: "/receipt/$id", params: { id: tx.id } });
   }
+
 
   const types: TxType[] = ["pix", "ted", "doc", "internal"];
 
