@@ -19,11 +19,12 @@ export const adminListUsers = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, full_name, email, phone, cpf, agencia, account_number, balance, kyc_status, face_verified, created_at")
+      .select("id, full_name, email, phone, cpf, agencia, account_number, balance, kyc_status, face_verified, blocked, created_at")
       .order("created_at", { ascending: false });
     if (error) throw error;
     return data;
   });
+
 
 export const adminListKyc = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
