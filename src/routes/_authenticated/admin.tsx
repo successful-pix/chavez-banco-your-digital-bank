@@ -92,8 +92,9 @@ function AdminPage() {
 type UserRow = {
   id: string; full_name: string; email: string | null; phone: string | null;
   cpf: string | null; agencia: string; account_number: string; balance: number;
-  kyc_status: string; face_verified: boolean; created_at: string;
+  kyc_status: string; face_verified: boolean; blocked: boolean; created_at: string;
 };
+
 
 function UsersTab() {
   const listUsers = useServerFn(adminListUsers);
