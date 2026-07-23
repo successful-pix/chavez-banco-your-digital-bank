@@ -12,11 +12,17 @@ import {
   adminRevokeRole,
   adminListRoles,
   adminSetTicketStatus,
+  adminSetBlocked,
+  adminListPendingTransfers,
+  adminApproveTransfer,
+  adminRejectTransfer,
+  adminListSupportProfiles,
   meIsAdmin,
 } from "@/lib/admin.functions";
 import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/components/toast";
-import { Search, Shield, FileCheck, MessageSquare, Wallet } from "lucide-react";
+import { Search, Shield, FileCheck, MessageSquare, Wallet, Ban, ArrowLeftRight } from "lucide-react";
+
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
