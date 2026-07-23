@@ -19,11 +19,12 @@ export const adminListUsers = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, full_name, email, phone, cpf, agencia, account_number, balance, kyc_status, face_verified, created_at")
+      .select("id, full_name, email, phone, cpf, agencia, account_number, balance, kyc_status, face_verified, blocked, created_at")
       .order("created_at", { ascending: false });
     if (error) throw error;
     return data;
   });
+
 
 export const adminListKyc = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -291,4 +292,138 @@ export const meIsAdmin = createServerFn({ method: "GET" })
       .eq("role", "admin")
       .maybeSingle();
     return { isAdmin: !!data };
+  });
+
+// --- Block / Unblock users ---
+export const adminSetBlocked = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ userId: z.string().uuid(), blocked: z.boolean() }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await assertAdmin(context.supabase, context.userId);
+    if (data.userId === context.userId && data.blocked) {
+      throw new Error("Você não pode bloquear a si mesmo.");
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("profiles").update({ blocked: data.blocked }).eq("id", data.userId);
+    if (error) throw error;
+    await supabaseAdmin.from("notifications").insert({
+      user_id: data.userId,
+      title: data.blocked ? "Conta bloqueada" : "Conta desbloqueada",
+      body: data.blocked
+        ? "Sua conta foi bloqueada. Entre em contato com o suporte."
+        : "Sua conta foi desbloqueada. Bem-vindo de volta!",
+    });
+    try {
+      const { data: p } = await supabaseAdmin.from("profiles").select("email, full_name").eq("id", data.userId).maybeSingle();
+      if (p?.email) {
+        const { emails } = await import("@/lib/email.server");
+        if (data.blocked) await emails.accountBlocked(p.email, p.full_name ?? "");
+        else await emails.accountUnblocked(p.email, p.full_name ?? "");
+      }
+    } catch (e) { console.error("[email] block", e); }
+    return { ok: true };
+  });
+
+// --- Pending transfer approvals ---
+export const adminListPendingTransfers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("transactions")
+      .select("*")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    const ids = Array.from(new Set((data ?? []).map((t: any) => t.user_id)));
+    let names: Record<string, { full_name: string | null; email: string | null; balance: number }> = {};
+    if (ids.length) {
+      const { data: profs } = await supabaseAdmin.from("profiles").select("id, full_name, email, balance").in("id", ids);
+      for (const p of profs ?? []) names[p.id] = { full_name: p.full_name, email: p.email, balance: Number(p.balance) };
+    }
+    return (data ?? []).map((t: any) => ({ ...t, _sender: names[t.user_id] ?? null }));
+  });
+
+export const adminApproveTransfer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ transactionId: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    await assertAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: tx, error: te } = await supabaseAdmin.from("transactions").select("*").eq("id", data.transactionId).maybeSingle();
+    if (te || !tx) throw new Error("Transferência não encontrada");
+    if (tx.status !== "pending") throw new Error("Transferência não está pendente");
+
+    const { data: profile, error: pe } = await supabaseAdmin
+      .from("profiles").select("balance, full_name, email").eq("id", tx.user_id).maybeSingle();
+    if (pe || !profile) throw new Error("Usuário não encontrado");
+
+    const current = Number(profile.balance);
+    const delta = tx.direction === "in" ? Number(tx.amount) : -Number(tx.amount);
+    const next = current + delta;
+    if (next < 0) throw new Error("Saldo insuficiente para aprovar");
+
+    const { error: ue } = await supabaseAdmin
+      .from("transactions")
+      .update({ status: "completed", approved_by: context.userId, approved_at: new Date().toISOString() })
+      .eq("id", tx.id);
+    if (ue) throw ue;
+
+    await supabaseAdmin.from("profiles").update({ balance: next }).eq("id", tx.user_id);
+    await supabaseAdmin.from("notifications").insert({
+      user_id: tx.user_id,
+      title: "Transferência aprovada",
+      body: `${tx.type?.toUpperCase()} — ${Number(tx.amount).toFixed(2)} aprovada.`,
+    });
+    try {
+      if (profile.email) {
+        const { emails } = await import("@/lib/email.server");
+        await emails.transferApproved(profile.email, profile.full_name ?? "", Number(tx.amount), tx.type ?? "transfer", tx.recipient_name);
+      }
+    } catch (e) { console.error("[email] approve", e); }
+    return { ok: true };
+  });
+
+export const adminRejectTransfer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ transactionId: z.string().uuid(), reason: z.string().max(300).optional() }).parse(d))
+  .handler(async ({ context, data }) => {
+    await assertAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: tx, error: te } = await supabaseAdmin.from("transactions").select("*").eq("id", data.transactionId).maybeSingle();
+    if (te || !tx) throw new Error("Transferência não encontrada");
+    if (tx.status !== "pending") throw new Error("Transferência não está pendente");
+    const { error: ue } = await supabaseAdmin
+      .from("transactions")
+      .update({ status: "rejected", approved_by: context.userId, approved_at: new Date().toISOString(), rejection_reason: data.reason ?? null })
+      .eq("id", tx.id);
+    if (ue) throw ue;
+    await supabaseAdmin.from("notifications").insert({
+      user_id: tx.user_id,
+      title: "Transferência rejeitada",
+      body: data.reason ?? `Sua ${tx.type?.toUpperCase()} foi rejeitada.`,
+    });
+    try {
+      const { data: p } = await supabaseAdmin.from("profiles").select("email, full_name").eq("id", tx.user_id).maybeSingle();
+      if (p?.email) {
+        const { emails } = await import("@/lib/email.server");
+        await emails.transferRejected(p.email, p.full_name ?? "", Number(tx.amount), tx.type ?? "transfer", data.reason ?? null);
+      }
+    } catch (e) { console.error("[email] reject", e); }
+    return { ok: true };
+  });
+
+// --- Support: return with profile names ---
+export const adminListSupportProfiles = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: profs } = await supabaseAdmin.from("profiles").select("id, full_name, email");
+    const map: Record<string, { full_name: string | null; email: string | null }> = {};
+    for (const p of profs ?? []) map[p.id] = { full_name: p.full_name, email: p.email };
+    return map;
   });

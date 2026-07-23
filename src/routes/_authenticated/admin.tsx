@@ -12,11 +12,17 @@ import {
   adminRevokeRole,
   adminListRoles,
   adminSetTicketStatus,
+  adminSetBlocked,
+  adminListPendingTransfers,
+  adminApproveTransfer,
+  adminRejectTransfer,
+  adminListSupportProfiles,
   meIsAdmin,
 } from "@/lib/admin.functions";
 import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/components/toast";
-import { Search, Shield, FileCheck, MessageSquare, Wallet } from "lucide-react";
+import { Search, Shield, FileCheck, MessageSquare, Wallet, Ban, ArrowLeftRight } from "lucide-react";
+
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -36,7 +42,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminPage,
 });
 
-type Tab = "users" | "kyc" | "credit" | "support";
+type Tab = "users" | "kyc" | "credit" | "transfers" | "blocked" | "support";
 
 function AdminPage() {
   const [tab, setTab] = useState<Tab>("users");
@@ -44,6 +50,8 @@ function AdminPage() {
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: "users", label: "Usuários", icon: Shield },
     { id: "kyc", label: "KYC", icon: FileCheck },
+    { id: "transfers", label: "Transferências", icon: ArrowLeftRight },
+    { id: "blocked", label: "Bloqueados", icon: Ban },
     { id: "credit", label: "Crédito / Débito", icon: Wallet },
     { id: "support", label: "Suporte", icon: MessageSquare },
   ];
@@ -52,7 +60,7 @@ function AdminPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-black tracking-tight">Painel Administrativo</h1>
-        <p className="text-sm text-muted-foreground">Gestão de usuários, KYC, saldos e suporte.</p>
+        <p className="text-sm text-muted-foreground">Gestão de usuários, KYC, transferências, saldos e suporte.</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -72,24 +80,30 @@ function AdminPage() {
 
       {tab === "users" && <UsersTab />}
       {tab === "kyc" && <KycTab />}
+      {tab === "transfers" && <TransfersTab />}
+      {tab === "blocked" && <BlockedTab />}
       {tab === "credit" && <CreditTab />}
       {tab === "support" && <SupportTab />}
     </div>
   );
 }
 
+
 type UserRow = {
   id: string; full_name: string; email: string | null; phone: string | null;
   cpf: string | null; agencia: string; account_number: string; balance: number;
-  kyc_status: string; face_verified: boolean; created_at: string;
+  kyc_status: string; face_verified: boolean; blocked: boolean; created_at: string;
 };
+
 
 function UsersTab() {
   const listUsers = useServerFn(adminListUsers);
   const listRoles = useServerFn(adminListRoles);
   const grantRole = useServerFn(adminGrantRole);
   const revokeRole = useServerFn(adminRevokeRole);
+  const setBlocked = useServerFn(adminSetBlocked);
   const toast = useToast();
+
   const [rows, setRows] = useState<UserRow[]>([]);
   const [admins, setAdmins] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
@@ -125,6 +139,21 @@ function UsersTab() {
     }
     setBusy(null);
   }
+
+  async function toggleBlock(u: UserRow) {
+    const willBlock = !u.blocked;
+    if (!confirm(willBlock ? `Bloquear conta de ${u.full_name}?` : `Desbloquear conta de ${u.full_name}?`)) return;
+    setBusy(u.id);
+    try {
+      await setBlocked({ data: { userId: u.id, blocked: willBlock } });
+      toast.push("success", willBlock ? "Usuário bloqueado" : "Usuário desbloqueado");
+      await refresh();
+    } catch (e: any) {
+      toast.push("error", e.message);
+    }
+    setBusy(null);
+  }
+
 
   return (
     <div className="space-y-3">
@@ -168,11 +197,16 @@ function UsersTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs font-bold px-2 py-1 rounded-lg ${isAdmin ? "bg-gradient-gold text-primary-foreground" : "bg-accent text-muted-foreground"}`}>
-                      {isAdmin ? "ADMIN" : "user"}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${isAdmin ? "bg-gradient-gold text-primary-foreground" : "bg-accent text-muted-foreground"}`}>
+                        {isAdmin ? "ADMIN" : "user"}
+                      </span>
+                      {r.blocked && (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-destructive text-destructive-foreground">BLOQUEADO</span>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                     <button
                       onClick={() => toggleAdmin(r)}
                       disabled={busy === r.id}
@@ -182,7 +216,17 @@ function UsersTab() {
                     >
                       {busy === r.id ? "..." : isAdmin ? "Revogar admin" : "Tornar admin"}
                     </button>
+                    <button
+                      onClick={() => toggleBlock(r)}
+                      disabled={busy === r.id}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition disabled:opacity-60 ${
+                        r.blocked ? "bg-success text-success-foreground" : "bg-destructive/90 text-destructive-foreground"
+                      }`}
+                    >
+                      {r.blocked ? "Desbloquear" : "Bloquear"}
+                    </button>
                   </td>
+
                 </tr>
               );
             })}
@@ -415,19 +459,23 @@ function CreditTab() {
 
 function SupportTab() {
   const listSupport = useServerFn(adminListSupport);
+  const listProfiles = useServerFn(adminListSupportProfiles);
   const reply = useServerFn(adminReplySupport);
   const setTicketStatus = useServerFn(adminSetTicketStatus);
   const toast = useToast();
   const [rows, setRows] = useState<any[]>([]);
+  const [names, setNames] = useState<Record<string, { full_name: string | null; email: string | null }>>({});
   const [selected, setSelected] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
 
   async function refresh() {
-    const d = await listSupport();
+    const [d, n] = await Promise.all([listSupport(), listProfiles()]);
     setRows(d as any[]);
+    setNames(n as any);
   }
   useEffect(() => { refresh().catch(() => {}); }, []);
+
 
   const grouped = useMemo(() => {
     const m = new Map<string, any[]>();
@@ -438,11 +486,17 @@ function SupportTab() {
     const term = q.trim().toLowerCase();
     const list = Array.from(m.entries());
     if (!term) return list;
-    return list.filter(([uid, msgs]) =>
-      uid.toLowerCase().includes(term) ||
-      msgs.some((mm: any) => (mm.body ?? "").toLowerCase().includes(term)),
-    );
-  }, [rows, q]);
+    return list.filter(([uid, msgs]) => {
+      const n = names[uid];
+      return (
+        uid.toLowerCase().includes(term) ||
+        (n?.full_name ?? "").toLowerCase().includes(term) ||
+        (n?.email ?? "").toLowerCase().includes(term) ||
+        msgs.some((mm: any) => (mm.body ?? "").toLowerCase().includes(term))
+      );
+    });
+  }, [rows, q, names]);
+
 
   async function send() {
     if (!selected || !text.trim()) return;
@@ -499,7 +553,11 @@ function SupportTab() {
                 className={`w-full text-left p-3 hover:bg-accent transition ${selected === uid ? "bg-accent" : ""}`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs font-mono">{uid.slice(0, 8)}</div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate">{names[uid]?.full_name ?? "—"}</div>
+                    <div className="text-[10px] font-mono text-muted-foreground truncate">{names[uid]?.email ?? uid.slice(0, 12)}</div>
+                  </div>
+
                   <div className="flex gap-1">
                     {latest.priority && latest.priority !== "normal" && (
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
@@ -528,8 +586,13 @@ function SupportTab() {
           <p className="text-sm text-muted-foreground m-auto">Selecione uma conversa.</p>
         ) : (
           <>
+            <div className="pb-3 border-b mb-3">
+              <div className="text-base font-bold">{names[selected!]?.full_name ?? "Usuário"}</div>
+              <div className="text-xs text-muted-foreground">{names[selected!]?.email ?? selected}</div>
+            </div>
             <div className="flex flex-wrap items-center gap-2 pb-3 border-b mb-3">
               <span className="text-xs font-semibold text-muted-foreground">Status:</span>
+
               {(["open", "pending", "closed"] as const).map((s) => (
                 <button key={s} onClick={() => setStatus(s)} className={`text-xs font-semibold px-2 py-1 rounded-lg border ${currentTicket?.status === s ? "bg-gradient-primary text-primary-foreground border-transparent" : "hover:bg-accent"}`}>{s}</button>
               ))}
@@ -586,3 +649,149 @@ function Input({ label, value, onChange, placeholder, type = "text" }: { label: 
     </label>
   );
 }
+
+// --- Blocked users tab ---
+function BlockedTab() {
+  const listUsers = useServerFn(adminListUsers);
+  const setBlocked = useServerFn(adminSetBlocked);
+  const toast = useToast();
+  const [rows, setRows] = useState<UserRow[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function refresh() {
+    const d = await listUsers();
+    setRows((d as unknown as UserRow[]).filter((r) => r.blocked));
+  }
+  useEffect(() => { refresh().catch(() => {}); }, []);
+
+  async function unblock(u: UserRow) {
+    if (!confirm(`Desbloquear ${u.full_name}?`)) return;
+    setBusy(u.id);
+    try {
+      await setBlocked({ data: { userId: u.id, blocked: false } });
+      toast.push("success", "Usuário desbloqueado");
+      await refresh();
+    } catch (e: any) { toast.push("error", e.message); }
+    setBusy(null);
+  }
+
+  return (
+    <div className="rounded-2xl border bg-card shadow-card divide-y">
+      {rows.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted-foreground">Nenhum usuário bloqueado.</p>}
+      {rows.map((r) => (
+        <div key={r.id} className="p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="font-semibold">{r.full_name || "—"}</div>
+            <div className="text-xs text-muted-foreground">{r.email} • {r.agencia} / {r.account_number}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold px-2 py-1 rounded-lg bg-destructive/15 text-destructive">BLOQUEADO</span>
+            <button
+              onClick={() => unblock(r)}
+              disabled={busy === r.id}
+              className="rounded-xl bg-success text-success-foreground px-3 py-1.5 text-xs font-bold disabled:opacity-60"
+            >
+              {busy === r.id ? "..." : "Desbloquear"}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- Pending transfers approval tab ---
+type PendingTx = {
+  id: string; user_id: string; type: string; direction: "in" | "out"; amount: number;
+  description: string | null; recipient_name: string | null; recipient_bank: string | null;
+  recipient_account: string | null; pix_key: string | null; created_at: string;
+  _sender: { full_name: string | null; email: string | null; balance: number } | null;
+};
+
+function TransfersTab() {
+  const listPending = useServerFn(adminListPendingTransfers);
+  const approve = useServerFn(adminApproveTransfer);
+  const reject = useServerFn(adminRejectTransfer);
+  const toast = useToast();
+  const [rows, setRows] = useState<PendingTx[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function refresh() {
+    const d = await listPending();
+    setRows(d as unknown as PendingTx[]);
+  }
+  useEffect(() => { refresh().catch(() => {}); }, []);
+
+  async function doApprove(tx: PendingTx) {
+    if (!confirm(`Aprovar ${tx.type.toUpperCase()} de ${formatBRL(Number(tx.amount))} para ${tx.recipient_name ?? tx.pix_key ?? "—"}?`)) return;
+    setBusy(tx.id);
+    try {
+      await approve({ data: { transactionId: tx.id } });
+      toast.push("success", "Transferência aprovada");
+      await refresh();
+    } catch (e: any) { toast.push("error", e.message); }
+    setBusy(null);
+  }
+
+  async function doReject(tx: PendingTx) {
+    const reason = prompt("Motivo da rejeição? (opcional)") ?? undefined;
+    setBusy(tx.id);
+    try {
+      await reject({ data: { transactionId: tx.id, reason } });
+      toast.push("success", "Transferência rejeitada");
+      await refresh();
+    } catch (e: any) { toast.push("error", e.message); }
+    setBusy(null);
+  }
+
+  return (
+    <div className="rounded-2xl border bg-card shadow-card divide-y">
+      {rows.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted-foreground">Nenhuma transferência pendente.</p>}
+      {rows.map((tx) => (
+        <div key={tx.id} className="p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-primary/10 text-primary uppercase">{tx.type}</span>
+              <span className="text-xs text-muted-foreground">{new Date(tx.created_at).toLocaleString("pt-BR")}</span>
+            </div>
+            <div className="mt-1 font-semibold">
+              {tx._sender?.full_name ?? tx.user_id.slice(0, 8)}{" "}
+              <span className="text-muted-foreground">→</span>{" "}
+              {tx.recipient_name ?? tx.pix_key ?? "—"}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {tx.recipient_bank ? `${tx.recipient_bank} • ` : ""}
+              {tx.recipient_account ?? tx.pix_key ?? ""}
+              {tx.description ? ` • ${tx.description}` : ""}
+            </div>
+            {tx._sender && (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Saldo atual do remetente: {formatBRL(tx._sender.balance)}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="text-right">
+              <div className="text-lg font-black">{formatBRL(Number(tx.amount))}</div>
+            </div>
+            <button
+              onClick={() => doApprove(tx)}
+              disabled={busy === tx.id}
+              className="rounded-xl bg-success text-success-foreground px-3 py-1.5 text-xs font-bold disabled:opacity-60"
+            >
+              {busy === tx.id ? "..." : "Aprovar"}
+            </button>
+            <button
+              onClick={() => doReject(tx)}
+              disabled={busy === tx.id}
+              className="rounded-xl bg-destructive text-destructive-foreground px-3 py-1.5 text-xs font-bold disabled:opacity-60"
+            >
+              Rejeitar
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+

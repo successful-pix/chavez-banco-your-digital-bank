@@ -81,6 +81,7 @@ export type Database = {
           agencia: string
           avatar_url: string | null
           balance: number
+          blocked: boolean
           country: string
           cpf: string | null
           created_at: string
@@ -103,6 +104,7 @@ export type Database = {
           agencia?: string
           avatar_url?: string | null
           balance?: number
+          blocked?: boolean
           country?: string
           cpf?: string | null
           created_at?: string
@@ -125,6 +127,7 @@ export type Database = {
           agencia?: string
           avatar_url?: string | null
           balance?: number
+          blocked?: boolean
           country?: string
           cpf?: string | null
           created_at?: string
@@ -221,6 +224,8 @@ export type Database = {
       transactions: {
         Row: {
           amount: number
+          approved_at: string | null
+          approved_by: string | null
           created_at: string
           description: string | null
           direction: string
@@ -231,6 +236,7 @@ export type Database = {
           recipient_bank: string | null
           recipient_name: string | null
           reference: string
+          rejection_reason: string | null
           sender_account: string | null
           sender_bank: string | null
           sender_name: string | null
@@ -240,6 +246,8 @@ export type Database = {
         }
         Insert: {
           amount: number
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           description?: string | null
           direction: string
@@ -250,6 +258,7 @@ export type Database = {
           recipient_bank?: string | null
           recipient_name?: string | null
           reference?: string
+          rejection_reason?: string | null
           sender_account?: string | null
           sender_bank?: string | null
           sender_name?: string | null
@@ -259,6 +268,8 @@ export type Database = {
         }
         Update: {
           amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           description?: string | null
           direction?: string
@@ -269,6 +280,7 @@ export type Database = {
           recipient_bank?: string | null
           recipient_name?: string | null
           reference?: string
+          rejection_reason?: string | null
           sender_account?: string | null
           sender_bank?: string | null
           sender_name?: string | null
