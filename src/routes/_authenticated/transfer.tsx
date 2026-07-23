@@ -124,6 +124,18 @@ function TransferPage() {
         </p>
       </div>
 
+      {blocked && (
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          Sua conta foi bloqueada. Entre em contato com o Suporte para desbloqueá-la.
+        </div>
+      )}
+      {!blocked && kycStatus !== "approved" && (
+        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm">
+          <b>KYC {kycStatus === "pending" ? "em análise" : kycStatus}.</b> Tempo estimado de análise: até 24 horas. Você poderá transferir após a aprovação.
+        </div>
+      )}
+
+
       {/* Type selector */}
       <div className="grid grid-cols-4 gap-2">
         {types.map((tp) => (
