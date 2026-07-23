@@ -586,8 +586,13 @@ function SupportTab() {
           <p className="text-sm text-muted-foreground m-auto">Selecione uma conversa.</p>
         ) : (
           <>
+            <div className="pb-3 border-b mb-3">
+              <div className="text-base font-bold">{names[selected!]?.full_name ?? "Usuário"}</div>
+              <div className="text-xs text-muted-foreground">{names[selected!]?.email ?? selected}</div>
+            </div>
             <div className="flex flex-wrap items-center gap-2 pb-3 border-b mb-3">
               <span className="text-xs font-semibold text-muted-foreground">Status:</span>
+
               {(["open", "pending", "closed"] as const).map((s) => (
                 <button key={s} onClick={() => setStatus(s)} className={`text-xs font-semibold px-2 py-1 rounded-lg border ${currentTicket?.status === s ? "bg-gradient-primary text-primary-foreground border-transparent" : "hover:bg-accent"}`}>{s}</button>
               ))}
