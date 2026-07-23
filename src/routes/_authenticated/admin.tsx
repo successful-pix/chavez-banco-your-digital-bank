@@ -140,6 +140,21 @@ function UsersTab() {
     setBusy(null);
   }
 
+  async function toggleBlock(u: UserRow) {
+    const willBlock = !u.blocked;
+    if (!confirm(willBlock ? `Bloquear conta de ${u.full_name}?` : `Desbloquear conta de ${u.full_name}?`)) return;
+    setBusy(u.id);
+    try {
+      await setBlocked({ data: { userId: u.id, blocked: willBlock } });
+      toast.push("success", willBlock ? "Usuário bloqueado" : "Usuário desbloqueado");
+      await refresh();
+    } catch (e: any) {
+      toast.push("error", e.message);
+    }
+    setBusy(null);
+  }
+
+
   return (
     <div className="space-y-3">
       <div className="relative">
