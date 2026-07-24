@@ -135,7 +135,7 @@ function Dashboard() {
             {hidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
           </button>
         </div>
-        <div className="mt-2 text-4xl font-black tracking-tight transition-all">
+        <div className="mt-1.5 text-[28px] leading-tight font-bold tracking-tight tabular-nums transition-all">
           {hidden ? "••••••" : formatBRL(profile.balance)}
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3 text-xs">
