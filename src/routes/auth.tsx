@@ -8,7 +8,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
 import { SmileVerify } from "@/components/smile-verify";
 import { useToast } from "@/components/toast";
-import { notifyWelcome, notifyLogin } from "@/lib/user.functions";
+import { notifyWelcome, notifyLogin, sendVerificationCode, verifyCode } from "@/lib/user.functions";
 
 const searchSchema = z.object({
   mode: z.enum(["signin", "signup"]).optional().default("signin"),
@@ -133,7 +133,9 @@ function SignUp() {
   const nav = useNavigate();
   const toast = useToast();
   const doWelcome = useServerFn(notifyWelcome);
-  const [step, setStep] = useState<"form" | "face" | "done">("form");
+  const doSendCode = useServerFn(sendVerificationCode);
+  const doVerifyCode = useServerFn(verifyCode);
+  const [step, setStep] = useState<"form" | "face" | "code">("form");
   const [data, setData] = useState({
     full_name: "",
     date_of_birth: "",
@@ -145,6 +147,8 @@ function SignUp() {
   });
   const [photo, setPhoto] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [code, setCode] = useState("");
+  const [resending, setResending] = useState(false);
 
   function up(k: keyof typeof data, v: string) {
     setData((p) => ({ ...p, [k]: v }));
@@ -159,12 +163,11 @@ function SignUp() {
 
   async function completeSignup() {
     setLoading(true);
-    const redirect = typeof window !== "undefined" ? window.location.origin : undefined;
     const { data: signUp, error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
       options: {
-        emailRedirectTo: redirect,
+        emailRedirectTo: "https://chavezbanco.online",
         data: {
           full_name: data.full_name,
           phone: data.phone,
@@ -180,7 +183,6 @@ function SignUp() {
       return;
     }
 
-    // Upload avatar if provided and session is available
     if (photo && signUp.user) {
       try {
         const path = `${signUp.user.id}/avatar-${Date.now()}-${photo.name}`;
@@ -193,26 +195,82 @@ function SignUp() {
       }
     }
 
+    // Auto-confirm is enabled server-side, so a session should exist. Send code.
+    try {
+      await doSendCode();
+    } catch (e) {
+      console.warn("send code failed", e);
+    }
     setLoading(false);
-    if (signUp.session) {
-      toast.push("success", "Conta criada!");
+    setStep("code");
+  }
+
+  async function submitCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (code.trim().length < 4) return toast.push("error", "Código inválido");
+    setLoading(true);
+    try {
+      const res = await doVerifyCode({ data: { code: code.trim() } });
+      if (!res?.ok) {
+        setLoading(false);
+        return toast.push("error", res?.error === "expired" ? "Código expirado" : "Código inválido");
+      }
+      toast.push("success", "Conta ativada!");
       doWelcome().catch(() => {});
       nav({ to: "/dashboard" });
-    } else {
-      setStep("done");
+    } catch (err: any) {
+      toast.push("error", err?.message ?? "Falha ao verificar");
+    } finally {
+      setLoading(false);
     }
   }
 
-  if (step === "done") {
+  async function resend() {
+    setResending(true);
+    try {
+      await doSendCode();
+      toast.push("success", "Código reenviado");
+    } catch {
+      toast.push("error", "Falha ao reenviar");
+    } finally {
+      setResending(false);
+    }
+  }
+
+  if (step === "code") {
     return (
-      <div className="text-center py-6">
-        <div className="mx-auto h-14 w-14 rounded-full bg-success/15 grid place-items-center text-success text-2xl">✓</div>
-        <h3 className="mt-4 font-bold text-foreground">Quase lá!</h3>
-        <p className="mt-2 text-sm text-muted-foreground">{t("auth.check.email")}</p>
-        <Link to="/auth" search={{ mode: "signin" }} className="mt-4 inline-block text-sm font-semibold text-primary">
-          {t("auth.signin.button")}
-        </Link>
-      </div>
+      <form onSubmit={submitCode} className="space-y-4">
+        <div className="text-center">
+          <div className="mx-auto h-14 w-14 rounded-full bg-primary/10 grid place-items-center text-primary text-2xl">✉️</div>
+          <h3 className="mt-3 font-bold text-foreground">Ative sua conta</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Enviamos um código de 6 dígitos para <b>{data.email}</b>.
+          </p>
+        </div>
+        <input
+          inputMode="numeric"
+          maxLength={6}
+          required
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          placeholder="000000"
+          className="w-full text-center text-2xl tracking-[0.6em] font-black rounded-xl border border-input bg-background px-3 py-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+        />
+        <button
+          disabled={loading}
+          className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60"
+        >
+          {loading ? t("common.loading") : "Ativar conta"}
+        </button>
+        <button
+          type="button"
+          onClick={resend}
+          disabled={resending}
+          className="w-full text-xs font-semibold text-primary hover:underline"
+        >
+          {resending ? "Enviando..." : "Reenviar código"}
+        </button>
+      </form>
     );
   }
 
@@ -231,6 +289,7 @@ function SignUp() {
       </div>
     );
   }
+
 
   return (
     <form onSubmit={submitForm} className="space-y-3">
