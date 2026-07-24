@@ -81,9 +81,21 @@ function ReceiptPage() {
         <div className="bg-gradient-primary text-primary-foreground p-6">
           <div className="flex items-center justify-between">
             <Logo className="[&_span]:text-white [&_div>div]:text-white" />
-            <span className="text-[10px] font-bold uppercase tracking-widest bg-white/15 px-2 py-1 rounded-full">
-              {t("receipt.status.completed")}
-            </span>
+            {(() => {
+              const map: Record<string, { label: string; cls: string }> = {
+                pending: { label: t("receipt.status.pending"), cls: "bg-amber-400 text-amber-950" },
+                completed: { label: t("receipt.status.completed"), cls: "bg-emerald-400 text-emerald-950" },
+                failed: { label: t("receipt.status.failed"), cls: "bg-red-400 text-red-950" },
+                cancelled: { label: t("receipt.status.cancelled"), cls: "bg-zinc-300 text-zinc-900" },
+                rejected: { label: t("receipt.status.rejected"), cls: "bg-red-400 text-red-950" },
+              };
+              const meta = map[tx.status] ?? { label: tx.status, cls: "bg-white/15 text-white" };
+              return (
+                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full ${meta.cls}`}>
+                  {meta.label}
+                </span>
+              );
+            })()}
           </div>
           <div className="mt-6">
             <div className="text-xs uppercase tracking-widest text-white/70">{typeLabel}</div>
