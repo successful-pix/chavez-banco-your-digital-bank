@@ -18,11 +18,8 @@ type Doc = { id: string; doc_type: string; storage_path: string; status: string;
 
 const DOC_TYPES = [
   { id: "cpf", label: "CPF" },
-  { id: "rg", label: "RG" },
-  { id: "cnh", label: "CNH" },
-  { id: "passport", label: "Passaporte" },
-  { id: "selfie", label: "Selfie com documento" },
 ];
+
 
 function KycPage() {
   const toast = useToast();
