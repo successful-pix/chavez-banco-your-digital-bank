@@ -41,6 +41,7 @@ type Tx = {
   created_at: string;
   recipient_name: string | null;
   sender_name: string | null;
+  status: string;
 };
 
 function Dashboard() {
@@ -135,7 +136,7 @@ function Dashboard() {
             {hidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
           </button>
         </div>
-        <div className="mt-2 text-4xl font-black tracking-tight transition-all">
+        <div className="mt-1.5 text-[28px] leading-tight font-bold tracking-tight tabular-nums transition-all">
           {hidden ? "••••••" : formatBRL(profile.balance)}
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3 text-xs">
@@ -195,8 +196,15 @@ function Dashboard() {
                       {tx.direction === "in" ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                     </div>
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold text-foreground truncate">
+                      <div className="text-sm font-semibold text-foreground truncate flex items-center gap-1.5">
                         {t(`tx.${tx.type}`) !== `tx.${tx.type}` ? t(`tx.${tx.type}`) : tx.type}
+                        {tx.status && tx.status !== "completed" && (
+                          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
+                            tx.status === "pending" ? "bg-amber-400/20 text-amber-700 dark:text-amber-300" :
+                            tx.status === "rejected" || tx.status === "failed" ? "bg-red-400/20 text-red-700 dark:text-red-300" :
+                            "bg-muted text-muted-foreground"
+                          }`}>{tx.status}</span>
+                        )}
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
                         {tx.direction === "in" ? tx.sender_name : tx.recipient_name} • {formatDate(tx.created_at, lang)}

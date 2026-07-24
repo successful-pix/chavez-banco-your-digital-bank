@@ -5,6 +5,7 @@ import { Logo } from "@/components/logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
 import { Home, Send, CreditCard, User, Bell, MessageSquare, ShieldCheck, Shield, Menu, X, LogOut } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -138,6 +139,7 @@ function Shell() {
                 </span>
               )}
             </Link>
+            <ThemeToggle />
             <div className="hidden sm:block"><LanguageSwitcher /></div>
             <button
               onClick={signOut}
@@ -196,7 +198,10 @@ function Shell() {
               })}
             </nav>
             <div className="border-t p-3 flex items-center justify-between gap-2">
-              <LanguageSwitcher />
+              <div className="flex items-center gap-2">
+                <LanguageSwitcher />
+                <ThemeToggle />
+              </div>
               <button
                 onClick={signOut}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-destructive/10 text-destructive px-3 py-2 text-xs font-bold hover:bg-destructive/20"

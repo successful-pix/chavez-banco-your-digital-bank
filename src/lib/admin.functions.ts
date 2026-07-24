@@ -416,7 +416,43 @@ export const adminRejectTransfer = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// --- Support: return with profile names ---
+export const adminSetTransferStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      transactionId: z.string().uuid(),
+      status: z.enum(["completed", "failed", "cancelled", "pending"]),
+    }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await assertAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: tx, error: te } = await supabaseAdmin
+      .from("transactions").select("*").eq("id", data.transactionId).maybeSingle();
+    if (te || !tx) throw new Error("Transferência não encontrada");
+    const { error: ue } = await supabaseAdmin
+      .from("transactions")
+      .update({
+        status: data.status,
+        approved_by: context.userId,
+        approved_at: new Date().toISOString(),
+      })
+      .eq("id", tx.id);
+    if (ue) throw ue;
+    const labels: Record<string, string> = {
+      completed: "concluída",
+      failed: "marcada como falha",
+      cancelled: "cancelada",
+      pending: "reaberta como pendente",
+    };
+    await supabaseAdmin.from("notifications").insert({
+      user_id: tx.user_id,
+      title: `Transferência ${labels[data.status]}`,
+      body: `Sua transferência de ${Number(tx.amount).toFixed(2)} foi ${labels[data.status]}.`,
+    });
+    return { ok: true };
+  });
+
 export const adminListSupportProfiles = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
