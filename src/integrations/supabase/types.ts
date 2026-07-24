@@ -88,6 +88,7 @@ export type Database = {
           currency: string
           date_of_birth: string | null
           email: string | null
+          email_verified: boolean
           face_verified: boolean
           full_name: string
           id: string
@@ -97,6 +98,8 @@ export type Database = {
           pix_key: string | null
           swift: string
           updated_at: string
+          verification_code: string | null
+          verification_expires_at: string | null
         }
         Insert: {
           account_number: string
@@ -111,6 +114,7 @@ export type Database = {
           currency?: string
           date_of_birth?: string | null
           email?: string | null
+          email_verified?: boolean
           face_verified?: boolean
           full_name?: string
           id: string
@@ -120,6 +124,8 @@ export type Database = {
           pix_key?: string | null
           swift?: string
           updated_at?: string
+          verification_code?: string | null
+          verification_expires_at?: string | null
         }
         Update: {
           account_number?: string
@@ -134,6 +140,7 @@ export type Database = {
           currency?: string
           date_of_birth?: string | null
           email?: string | null
+          email_verified?: boolean
           face_verified?: boolean
           full_name?: string
           id?: string
@@ -143,6 +150,8 @@ export type Database = {
           pix_key?: string | null
           swift?: string
           updated_at?: string
+          verification_code?: string | null
+          verification_expires_at?: string | null
         }
         Relationships: []
       }
