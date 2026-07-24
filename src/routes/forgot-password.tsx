@@ -25,7 +25,7 @@ function Page() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const redirect = typeof window !== "undefined" ? `${window.location.origin}/reset-password` : undefined;
+    const redirect = "https://chavezbanco.online/reset-password";
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirect });
     setLoading(false);
     if (error) return toast.push("error", error.message);

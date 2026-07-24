@@ -61,10 +61,17 @@ const brl = (n: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(n) || 0);
 
 export const emails = {
+  verificationCode: (to: string, name: string, code: string) =>
+    send(to, `Seu código de ativação Chavez: ${code}`, shell("Ative sua conta",
+      `<p>Olá <b>${name || ""}</b>,</p><p>Use o código abaixo para ativar sua conta Chavez Banco. Ele expira em 15 minutos.</p>
+       <div style="margin:22px 0;text-align:center"><div style="display:inline-block;background:${BRAND_PRIMARY};color:#fff;font-size:32px;letter-spacing:8px;font-weight:800;padding:16px 28px;border-radius:14px">${code}</div></div>
+       <p style="color:#64748b;font-size:13px">Se você não solicitou este código, ignore este e-mail.</p>`)),
+
   welcome: (to: string, name: string) =>
     send(to, "Bem-vindo à Chavez Banco 🎉", shell("Bem-vindo, " + name,
       `<p>Olá <b>${name}</b>,</p><p>Sua conta digital Chavez Banco foi criada com sucesso. Você já pode enviar PIX, receber transferências e gerenciar seus cartões pelo app.</p>
        <p style="margin-top:20px"><a href="https://chavezbanco.online" style="background:${BRAND_PRIMARY};color:#fff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:700">Acessar minha conta</a></p>`)),
+
 
   login: (to: string, name: string) =>
     send(to, "Novo acesso à sua conta Chavez", shell("Novo acesso detectado",
