@@ -157,6 +157,13 @@ function TransferPage() {
           <b>KYC {kycStatus === "pending" ? "em análise" : kycStatus}.</b> Tempo estimado de análise: até 24 horas. Você poderá transferir após a aprovação.
         </div>
       )}
+      {!blocked && kycStatus === "approved" && hasPin === false && (
+        <div className="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4 text-sm">
+          <b>PIN de transferência necessário.</b> <Link to="/security" className="underline font-semibold text-primary">Configurar agora</Link> para autorizar transferências.
+        </div>
+      )}
+
+
 
 
       {/* Type selector */}
