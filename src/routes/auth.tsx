@@ -8,6 +8,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
 import { SmileVerify } from "@/components/smile-verify";
 import { useToast } from "@/components/toast";
+import { PasswordInput } from "@/components/password-input";
 import { notifyWelcome, notifyLogin, sendVerificationCode, verifyCode } from "@/lib/user.functions";
 
 const searchSchema = z.object({
