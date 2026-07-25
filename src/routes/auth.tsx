@@ -379,8 +379,8 @@ function SignUp() {
       <Input label={t("auth.cpf")} required value={data.cpf} onChange={(e) => up("cpf", e.target.value)} />
       <Input label={t("auth.email")} type="email" required value={data.email} onChange={(e) => up("email", e.target.value)} />
       <div className="grid grid-cols-2 gap-3">
-        <Input label={t("auth.password")} type="password" required value={data.password} onChange={(e) => up("password", e.target.value)} />
-        <Input label={t("auth.password.confirm")} type="password" required value={data.confirm} onChange={(e) => up("confirm", e.target.value)} />
+        <PasswordInput label={t("auth.password")} required value={data.password} onChange={(e) => up("password", e.target.value)} />
+        <PasswordInput label={t("auth.password.confirm")} required value={data.confirm} onChange={(e) => up("confirm", e.target.value)} />
       </div>
       <label className="block">
         <span className="text-xs font-semibold text-foreground/80">{t("auth.photo")}</span>
