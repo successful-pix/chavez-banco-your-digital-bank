@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -7,6 +7,8 @@ import { useI18n } from "@/lib/i18n";
 import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/components/toast";
 import { notifyTransfer } from "@/lib/user.functions";
+import { getPinStatus } from "@/lib/pin.functions";
+import { PinModal } from "@/components/pin-modal";
 
 const searchSchema = z.object({
   type: z.enum(["pix", "ted", "doc", "internal"]).optional().default("pix"),
@@ -31,11 +33,14 @@ function TransferPage() {
   const nav = useNavigate();
   const toast = useToast();
   const doTransferEmail = useServerFn(notifyTransfer);
+  const pinStatus = useServerFn(getPinStatus);
 
   const [type, setType] = useState<TxType>(initialType);
   const [balance, setBalance] = useState(0);
   const [blocked, setBlocked] = useState(false);
   const [kycStatus, setKycStatus] = useState<string>("pending");
+  const [hasPin, setHasPin] = useState<boolean | null>(null);
+  const [pinOpen, setPinOpen] = useState(false);
   const [form, setForm] = useState({
     recipient_name: "",
     bank: "",
@@ -57,6 +62,12 @@ function TransferPage() {
         setBlocked(!!(p as any).blocked);
         setKycStatus((p as any).kyc_status ?? "pending");
       }
+      try {
+        const ps = await pinStatus();
+        setHasPin(!!ps?.hasPin);
+      } catch {
+        setHasPin(false);
+      }
     })();
   }, []);
 
@@ -64,14 +75,26 @@ function TransferPage() {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (blocked) return toast.push("error", "Sua conta está bloqueada. Contate o suporte.");
-    if (kycStatus !== "approved") return toast.push("error", "Conclua sua verificação KYC antes de transferir.");
+  function validate() {
+    if (blocked) { toast.push("error", "Sua conta está bloqueada. Contate o suporte."); return null; }
+    if (kycStatus !== "approved") { toast.push("error", "Conclua sua verificação KYC antes de transferir."); return null; }
+    if (!hasPin) { toast.push("error", "Configure seu PIN de transferência em Segurança."); return null; }
     const amount = Number(form.amount.replace(",", "."));
-    if (!isFinite(amount) || amount <= 0) return toast.push("error", "Valor inválido");
-    if (amount > balance) return toast.push("error", t("transfer.insufficient"));
+    if (!isFinite(amount) || amount <= 0) { toast.push("error", "Valor inválido"); return null; }
+    if (amount > balance) { toast.push("error", t("transfer.insufficient")); return null; }
+    return amount;
+  }
 
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const amount = validate();
+    if (amount === null) return;
+    setPinOpen(true);
+  }
+
+  async function afterPin() {
+    setPinOpen(false);
+    const amount = Number(form.amount.replace(",", "."));
     setSaving(true);
     const { data: s } = await supabase.auth.getUser();
     if (!s.user) { setSaving(false); return; }
@@ -134,6 +157,13 @@ function TransferPage() {
           <b>KYC {kycStatus === "pending" ? "em análise" : kycStatus}.</b> Tempo estimado de análise: até 24 horas. Você poderá transferir após a aprovação.
         </div>
       )}
+      {!blocked && kycStatus === "approved" && hasPin === false && (
+        <div className="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4 text-sm">
+          <b>PIN de transferência necessário.</b> <Link to="/security" className="underline font-semibold text-primary">Configurar agora</Link> para autorizar transferências.
+        </div>
+      )}
+
+
 
 
       {/* Type selector */}
@@ -176,6 +206,13 @@ function TransferPage() {
           {saving ? t("transfer.saving") : t("transfer.submit")}
         </button>
       </form>
+
+      <PinModal
+        open={pinOpen}
+        onClose={() => setPinOpen(false)}
+        onVerified={afterPin}
+        description={`Autorize a transferência de ${formatBRL(Number(form.amount.replace(",", ".")) || 0)}.`}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/logo";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/toast";
+import { PasswordInput } from "@/components/password-input";
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
@@ -44,10 +45,8 @@ function Page() {
         <div className="rounded-2xl border bg-card shadow-card p-6">
           <h1 className="text-xl font-bold text-foreground">{t("auth.reset.title")}</h1>
           <form onSubmit={submit} className="mt-4 space-y-3">
-            <input type="password" required placeholder={t("auth.reset.new")} value={pw} onChange={(e) => setPw(e.target.value)}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
-            <input type="password" required placeholder={t("auth.password.confirm")} value={pw2} onChange={(e) => setPw2(e.target.value)}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
+            <PasswordInput required placeholder={t("auth.reset.new")} value={pw} onChange={(e) => setPw(e.target.value)} />
+            <PasswordInput required placeholder={t("auth.password.confirm")} value={pw2} onChange={(e) => setPw2(e.target.value)} />
             <button disabled={loading} className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60">
               {loading ? t("common.loading") : t("auth.reset.button")}
             </button>

@@ -8,6 +8,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
 import { SmileVerify } from "@/components/smile-verify";
 import { useToast } from "@/components/toast";
+import { PasswordInput } from "@/components/password-input";
 import { notifyWelcome, notifyLogin, sendVerificationCode, verifyCode } from "@/lib/user.functions";
 
 const searchSchema = z.object({
@@ -90,29 +91,106 @@ function SignIn() {
   const nav = useNavigate();
   const toast = useToast();
   const doLoginEmail = useServerFn(notifyLogin);
+  const doSendCode = useServerFn(sendVerificationCode);
+  const doVerifyCode = useServerFn(verifyCode);
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [loading, setLoading] = useState(false);
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [code, setCode] = useState("");
+  const [resending, setResending] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
-    setLoading(false);
+    const { data: signInRes, error } = await supabase.auth.signInWithPassword({ email, password: pw });
     if (error) {
+      setLoading(false);
       toast.push("error", error.message);
       return;
     }
+    // Check email verification on profile before allowing app access
+    if (signInRes.user) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("email_verified")
+        .eq("id", signInRes.user.id)
+        .maybeSingle();
+      if (prof && (prof as any).email_verified === false) {
+        try { await doSendCode(); } catch { /* ignore */ }
+        setLoading(false);
+        setNeedsVerify(true);
+        toast.push("success", "Enviamos um código para o seu e-mail");
+        return;
+      }
+    }
+    setLoading(false);
     toast.push("success", "Bem-vindo!");
     doLoginEmail().catch(() => {});
     nav({ to: "/dashboard" });
   }
 
+  async function submitCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (code.trim().length < 4) return toast.push("error", "Código inválido");
+    setLoading(true);
+    try {
+      const res = await doVerifyCode({ data: { code: code.trim() } });
+      if (!res?.ok) {
+        setLoading(false);
+        return toast.push("error", res?.error === "expired" ? "Código expirado" : "Código inválido");
+      }
+      toast.push("success", "Conta ativada!");
+      doLoginEmail().catch(() => {});
+      nav({ to: "/dashboard" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resend() {
+    setResending(true);
+    try { await doSendCode(); toast.push("success", "Código reenviado"); }
+    catch { toast.push("error", "Falha ao reenviar"); }
+    finally { setResending(false); }
+  }
+
+  if (needsVerify) {
+    return (
+      <form onSubmit={submitCode} className="space-y-4">
+        <div className="text-center">
+          <div className="mx-auto h-14 w-14 rounded-full bg-primary/10 grid place-items-center text-primary text-2xl">✉️</div>
+          <h3 className="mt-3 font-bold text-foreground">Verifique seu e-mail</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Seu e-mail ainda não foi verificado. Enviamos um código de 6 dígitos para <b>{email}</b>.
+          </p>
+        </div>
+        <input
+          inputMode="numeric"
+          maxLength={6}
+          required
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          placeholder="000000"
+          className="w-full text-center text-2xl tracking-[0.6em] font-black rounded-xl border border-input bg-background px-3 py-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+        />
+        <button
+          disabled={loading}
+          className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60"
+        >
+          {loading ? t("common.loading") : "Ativar conta"}
+        </button>
+        <button type="button" onClick={resend} disabled={resending} className="w-full text-xs font-semibold text-primary hover:underline">
+          {resending ? "Enviando..." : "Reenviar código"}
+        </button>
+      </form>
+    );
+  }
 
   return (
     <form onSubmit={submit} className="space-y-4">
       <Input label={t("auth.email")} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-      <Input label={t("auth.password")} type="password" required value={pw} onChange={(e) => setPw(e.target.value)} />
+      <PasswordInput label={t("auth.password")} required value={pw} onChange={(e) => setPw(e.target.value)} />
       <button
         disabled={loading}
         className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60"
@@ -301,8 +379,8 @@ function SignUp() {
       <Input label={t("auth.cpf")} required value={data.cpf} onChange={(e) => up("cpf", e.target.value)} />
       <Input label={t("auth.email")} type="email" required value={data.email} onChange={(e) => up("email", e.target.value)} />
       <div className="grid grid-cols-2 gap-3">
-        <Input label={t("auth.password")} type="password" required value={data.password} onChange={(e) => up("password", e.target.value)} />
-        <Input label={t("auth.password.confirm")} type="password" required value={data.confirm} onChange={(e) => up("confirm", e.target.value)} />
+        <PasswordInput label={t("auth.password")} required value={data.password} onChange={(e) => up("password", e.target.value)} />
+        <PasswordInput label={t("auth.password.confirm")} required value={data.confirm} onChange={(e) => up("confirm", e.target.value)} />
       </div>
       <label className="block">
         <span className="text-xs font-semibold text-foreground/80">{t("auth.photo")}</span>
