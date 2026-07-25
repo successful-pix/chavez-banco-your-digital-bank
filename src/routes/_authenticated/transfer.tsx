@@ -62,6 +62,12 @@ function TransferPage() {
         setBlocked(!!(p as any).blocked);
         setKycStatus((p as any).kyc_status ?? "pending");
       }
+      try {
+        const ps = await pinStatus();
+        setHasPin(!!ps?.hasPin);
+      } catch {
+        setHasPin(false);
+      }
     })();
   }, []);
 
@@ -69,14 +75,26 @@ function TransferPage() {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (blocked) return toast.push("error", "Sua conta está bloqueada. Contate o suporte.");
-    if (kycStatus !== "approved") return toast.push("error", "Conclua sua verificação KYC antes de transferir.");
+  function validate() {
+    if (blocked) { toast.push("error", "Sua conta está bloqueada. Contate o suporte."); return null; }
+    if (kycStatus !== "approved") { toast.push("error", "Conclua sua verificação KYC antes de transferir."); return null; }
+    if (!hasPin) { toast.push("error", "Configure seu PIN de transferência em Segurança."); return null; }
     const amount = Number(form.amount.replace(",", "."));
-    if (!isFinite(amount) || amount <= 0) return toast.push("error", "Valor inválido");
-    if (amount > balance) return toast.push("error", t("transfer.insufficient"));
+    if (!isFinite(amount) || amount <= 0) { toast.push("error", "Valor inválido"); return null; }
+    if (amount > balance) { toast.push("error", t("transfer.insufficient")); return null; }
+    return amount;
+  }
 
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const amount = validate();
+    if (amount === null) return;
+    setPinOpen(true);
+  }
+
+  async function afterPin() {
+    setPinOpen(false);
+    const amount = Number(form.amount.replace(",", "."));
     setSaving(true);
     const { data: s } = await supabase.auth.getUser();
     if (!s.user) { setSaving(false); return; }
