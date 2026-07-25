@@ -33,11 +33,14 @@ function TransferPage() {
   const nav = useNavigate();
   const toast = useToast();
   const doTransferEmail = useServerFn(notifyTransfer);
+  const pinStatus = useServerFn(getPinStatus);
 
   const [type, setType] = useState<TxType>(initialType);
   const [balance, setBalance] = useState(0);
   const [blocked, setBlocked] = useState(false);
   const [kycStatus, setKycStatus] = useState<string>("pending");
+  const [hasPin, setHasPin] = useState<boolean | null>(null);
+  const [pinOpen, setPinOpen] = useState(false);
   const [form, setForm] = useState({
     recipient_name: "",
     bank: "",
