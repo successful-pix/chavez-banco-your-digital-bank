@@ -63,6 +63,7 @@ function Shell() {
     { to: "/kyc", label: "KYC", icon: ShieldCheck },
     { to: "/support", label: t("nav.support"), icon: MessageSquare },
     { to: "/notifications", label: "Notificações", icon: Bell },
+    { to: "/security", label: "Segurança", icon: Lock },
   ];
 
   const allItems = [...nav, ...secondary, ...(isAdmin ? [{ to: "/admin", label: "Admin", icon: Shield }] : [])];
