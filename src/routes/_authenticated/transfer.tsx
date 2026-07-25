@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -7,6 +7,8 @@ import { useI18n } from "@/lib/i18n";
 import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/components/toast";
 import { notifyTransfer } from "@/lib/user.functions";
+import { getPinStatus } from "@/lib/pin.functions";
+import { PinModal } from "@/components/pin-modal";
 
 const searchSchema = z.object({
   type: z.enum(["pix", "ted", "doc", "internal"]).optional().default("pix"),
