@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
-import { Home, Send, CreditCard, User, Bell, MessageSquare, ShieldCheck, Shield, Menu, X, LogOut } from "lucide-react";
+import { Home, Send, CreditCard, User, Bell, MessageSquare, ShieldCheck, Shield, Menu, X, LogOut, Lock } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export const Route = createFileRoute("/_authenticated")({
