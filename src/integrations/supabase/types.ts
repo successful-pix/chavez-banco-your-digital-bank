@@ -81,6 +81,7 @@ export type Database = {
           agencia: string
           avatar_url: string | null
           balance: number
+          balance_hidden: boolean
           blocked: boolean
           country: string
           cpf: string | null
@@ -95,6 +96,10 @@ export type Database = {
           kyc_status: string
           language: string
           phone: string | null
+          pin_attempts: number
+          pin_hash: string | null
+          pin_locked_until: string | null
+          pin_salt: string | null
           pix_key: string | null
           swift: string
           updated_at: string
@@ -107,6 +112,7 @@ export type Database = {
           agencia?: string
           avatar_url?: string | null
           balance?: number
+          balance_hidden?: boolean
           blocked?: boolean
           country?: string
           cpf?: string | null
@@ -121,6 +127,10 @@ export type Database = {
           kyc_status?: string
           language?: string
           phone?: string | null
+          pin_attempts?: number
+          pin_hash?: string | null
+          pin_locked_until?: string | null
+          pin_salt?: string | null
           pix_key?: string | null
           swift?: string
           updated_at?: string
@@ -133,6 +143,7 @@ export type Database = {
           agencia?: string
           avatar_url?: string | null
           balance?: number
+          balance_hidden?: boolean
           blocked?: boolean
           country?: string
           cpf?: string | null
@@ -147,6 +158,10 @@ export type Database = {
           kyc_status?: string
           language?: string
           phone?: string | null
+          pin_attempts?: number
+          pin_hash?: string | null
+          pin_locked_until?: string | null
+          pin_salt?: string | null
           pix_key?: string | null
           swift?: string
           updated_at?: string
