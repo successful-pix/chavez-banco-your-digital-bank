@@ -206,6 +206,13 @@ function TransferPage() {
           {saving ? t("transfer.saving") : t("transfer.submit")}
         </button>
       </form>
+
+      <PinModal
+        open={pinOpen}
+        onClose={() => setPinOpen(false)}
+        onVerified={afterPin}
+        description={`Autorize a transferência de ${formatBRL(Number(form.amount.replace(",", ".")) || 0)}.`}
+      />
     </div>
   );
 }
