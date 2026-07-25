@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/logo";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/toast";
+import { PasswordInput } from "@/components/password-input";
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
