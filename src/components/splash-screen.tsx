@@ -29,8 +29,8 @@ export function SplashScreen() {
       }`}
       style={{ pointerEvents: fading ? "none" : "auto" }}
     >
-      <div className="splash-logo">
-        <Logo variant="light" />
+      <div className="splash-logo rounded-2xl bg-white/10 px-5 py-4 backdrop-blur-sm ring-1 ring-white/20">
+        <Logo />
       </div>
       <div className="mt-8 h-1 w-40 overflow-hidden rounded-full bg-white/20">
         <div className="splash-bar h-full rounded-full bg-white/90" />

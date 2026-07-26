@@ -15,6 +15,7 @@ import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/toast";
 import { ThemeProvider } from "@/lib/theme";
 import { InstallPrompt } from "@/components/install-prompt";
+import { SplashScreen } from "@/components/splash-screen";
 import { initInstallPrompt, registerPwa } from "@/lib/pwa-register";
 
 function NotFoundComponent() {
@@ -138,6 +139,7 @@ function RootComponent() {
       <ThemeProvider>
         <I18nProvider>
           <ToastProvider>
+            <SplashScreen />
             <Outlet />
             <InstallPrompt />
           </ToastProvider>
