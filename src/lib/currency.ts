@@ -1,11 +1,12 @@
+// US-style BRL formatting: R$58,000.00 (comma thousands, dot decimals)
 export function formatBRL(value: number | string | null | undefined): string {
   const n = typeof value === "string" ? Number(value) : (value ?? 0);
-  if (!isFinite(n)) return "R$ 0,00";
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
+  const safe = isFinite(n) ? n : 0;
+  const formatted = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
-  }).format(n);
+    maximumFractionDigits: 2,
+  }).format(safe);
+  return `R$${formatted}`;
 }
 
 export function formatDate(iso: string, lang: string = "pt-BR"): string {
