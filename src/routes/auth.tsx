@@ -272,8 +272,7 @@ function SignUp() {
         console.warn("avatar upload failed", e);
       }
     }
-
-   // Auto-confirm is enabled server-side, so a session should exist. Send code.
+// Auto-confirm is enabled server-side, so a session should exist. Send code.
 try {
   await doSendCode();
 } catch (e) {
@@ -282,7 +281,7 @@ try {
 
 setLoading(false);
 setStep("code");
-
+   
   async function submitCode(e: React.FormEvent) {
     e.preventDefault();
     if (code.trim().length < 4) return toast.push("error", "Código inválido");
