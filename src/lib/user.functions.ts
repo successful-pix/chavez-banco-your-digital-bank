@@ -64,12 +64,13 @@ const emailResult = await emails.verificationCode(
   p.full_name ?? "",
   code
 );
-
 console.log("VERIFICATION EMAIL RESULT:", emailResult);
 
 return { ok: true, emailResult };
-
+  });
+  
 export const verifyCode = createServerFn({ method: "POST" })
+
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ code: z.string().min(4).max(10) }).parse(d))
   .handler(async ({ context, data }) => {
