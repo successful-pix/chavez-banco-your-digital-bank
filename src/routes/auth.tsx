@@ -282,9 +282,6 @@ try {
 setLoading(false);
 setStep("code");
 }
-
-async function submitCode(e: React.FormEvent) {
-   
   async function submitCode(e: React.FormEvent) {
     e.preventDefault();
     if (code.trim().length < 4) return toast.push("error", "Código inválido");
