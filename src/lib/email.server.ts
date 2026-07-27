@@ -1,7 +1,5 @@
 // Server-only Resend sender for Chavez Banco notifications.
-// Uses the Lovable Resend connector gateway. Never import from client code.
-
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/resend";
+// Uses Resend API directly. Server-only. Never import from client code.
 
 const FROM = "Chavez Banco <support@chavezbanco.online>";
 const BRAND_PRIMARY = "#0B4DBB";
@@ -29,27 +27,34 @@ function shell(title: string, bodyHtml: string) {
 }
 
 async function send(to: string, subject: string, html: string) {
-  const lovableKey = process.env.LOVABLE_API_KEY;
   const resendKey = process.env.RESEND_API_KEY;
-  if (!lovableKey || !resendKey) {
-    console.warn("[email] Missing LOVABLE_API_KEY or RESEND_API_KEY; skipping send.");
+
+  if (!resendKey) {
+    console.warn("[email] Missing RESEND_API_KEY");
     return { skipped: true };
   }
+
   try {
-    const res = await fetch(`${GATEWAY_URL}/emails`, {
+    const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${lovableKey}`,
-        "X-Connection-Api-Key": resendKey,
+        Authorization: `Bearer ${resendKey}`,
       },
-      body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+      body: JSON.stringify({
+        from: FROM,
+        to: [to],
+        subject,
+        html,
+      }),
     });
+
     if (!res.ok) {
       const body = await res.text();
       console.error(`[email] send failed [${res.status}]: ${body}`);
       return { ok: false, status: res.status, body };
     }
+
     return { ok: true };
   } catch (e: any) {
     console.error("[email] error", e?.message ?? e);
