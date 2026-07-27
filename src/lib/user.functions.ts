@@ -58,9 +58,16 @@ export const sendVerificationCode = createServerFn({ method: "POST" })
       .update({ verification_code: code, verification_expires_at: expires })
       .eq("id", context.userId);
     const { emails } = await import("@/lib/email.server");
-    await emails.verificationCode(p.email, p.full_name ?? "", code);
-    return { ok: true };
-  });
+
+const emailResult = await emails.verificationCode(
+  p.email,
+  p.full_name ?? "",
+  code
+);
+
+console.log("VERIFICATION EMAIL RESULT:", emailResult);
+
+return { ok: true, emailResult };
 
 export const verifyCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
