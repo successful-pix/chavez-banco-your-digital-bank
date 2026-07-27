@@ -273,15 +273,16 @@ function SignUp() {
       }
     }
 
-    // Auto-confirm is enabled server-side, so a session should exist. Send code.
-    try {
-      await doSendCode();
-    } catch (e) {
-      console.warn("send code failed", e);
-    }
-    setLoading(false);
-    setStep("code");
-  }
+   // Auto-confirm is enabled server-side, so a session should exist. Send code.
+try {
+  const result = await doSendCode();
+  console.log("SEND CODE RESULT:", result);
+} catch (e) {
+  console.error("SEND CODE FAILED:", e);
+}
+
+setLoading(false);
+setStep("code");
 
   async function submitCode(e: React.FormEvent) {
     e.preventDefault();
