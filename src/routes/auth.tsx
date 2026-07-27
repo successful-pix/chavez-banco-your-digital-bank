@@ -275,10 +275,9 @@ function SignUp() {
 
    // Auto-confirm is enabled server-side, so a session should exist. Send code.
 try {
-  const result = await doSendCode();
-  console.log("SEND CODE RESULT:", result);
+  await doSendCode();
 } catch (e) {
-  console.error("SEND CODE FAILED:", e);
+  console.warn("send code failed", e);
 }
 
 setLoading(false);
