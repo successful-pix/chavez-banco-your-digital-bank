@@ -122,32 +122,37 @@ function Dashboard() {
 
 
       {/* Balance card */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-primary p-6 shadow-elevated text-primary-foreground ring-1 ring-white/10 transition hover:shadow-2xl">
-        <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/15 blur-2xl" />
-        <div className="absolute -left-20 -bottom-20 h-56 w-56 rounded-full bg-black/20 blur-2xl" />
-        <div className="absolute right-6 top-6 h-6 w-10 rounded bg-gradient-gold shadow-lg" />
-        <div className="flex items-center justify-between">
-          <span className="text-xs uppercase tracking-widest text-white/80">{t("dashboard.balance")}</span>
-          <button
-            onClick={() => setHidden((h) => !h)}
-            className="rounded-lg p-1.5 hover:bg-white/15 transition"
-            title={hidden ? "Mostrar saldo" : "Ocultar saldo"}
-          >
-            {hidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-          </button>
-        </div>
-        <div className="mt-1.5 text-[28px] leading-tight font-bold tracking-tight tabular-nums transition-all">
-          {hidden ? "••••••" : formatBRL(profile.balance)}
-        </div>
-        <div className="mt-6 grid grid-cols-2 gap-3 text-xs">
-          <Info label={t("dashboard.agencia")} value={profile.agencia} onCopy={() => copy(profile.agencia)} />
-          <Info label={t("dashboard.account")} value={maskAccount(profile.account_number)} onCopy={() => copy(profile.account_number)} />
-          <Info label={t("dashboard.pix")} value={profile.pix_key ?? "—"} onCopy={() => profile.pix_key && copy(profile.pix_key)} />
-          <Info label={t("dashboard.type")} value={profile.account_type} />
-          <Info label={t("dashboard.swift")} value={profile.swift} />
-          <Info label={t("dashboard.currency")} value={`${profile.currency} • ${profile.country}`} />
-        </div>
-      </div>
+<div className="relative overflow-hidden rounded-3xl bg-gradient-primary p-6 shadow-elevated text-primary-foreground ring-1 ring-white/10 transition hover:shadow-2xl">
+  <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/15 blur-2xl" />
+  <div className="absolute -left-20 -bottom-20 h-56 w-56 rounded-full bg-black/20 blur-2xl" />
+  <div className="absolute right-6 top-6 h-6 w-10 rounded bg-gradient-gold shadow-lg" />
+  
+  <div className="flex items-center justify-between relative z-10">
+    <span className="text-xs uppercase tracking-widest text-white/80">{t("dashboard.balance")}</span>
+    
+    <button
+      type="button"
+      onClick={() => setHidden((h) => !h)}
+      className="rounded-lg p-1.5 hover:bg-white/20 transition active:scale-95"
+      title={hidden ? "Mostrar saldo" : "Ocultar saldo"}
+    >
+      {hidden ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
+    </button>
+  </div>
+
+  <div className="mt-1.5 text-[28px] leading-tight font-bold tracking-tight tabular-nums transition-all relative z-10">
+    {hidden ? "R$ ••••••" : formatBRL(profile.balance)}
+  </div>
+
+  <div className="mt-6 grid grid-cols-2 gap-3 text-xs relative z-10">
+    <Info label={t("dashboard.agencia")} value={profile.agencia} onCopy={() => copy(profile.agencia)} />
+    <Info label={t("dashboard.account")} value={maskAccount(profile.account_number)} onCopy={() => copy(profile.account_number)} />
+    <Info label={t("dashboard.pix")} value={profile.pix_key ?? "—"} onCopy={() => profile.pix_key && copy(profile.pix_key)} />
+    <Info label={t("dashboard.type")} value={profile.account_type} />
+    <Info label={t("dashboard.swift")} value={profile.swift} />
+    <Info label={t("dashboard.currency")} value={`${profile.currency} • ${profile.country}`} />
+  </div>
+</div>
 
       {/* Quick actions */}
       <div className="grid grid-cols-4 gap-3">
