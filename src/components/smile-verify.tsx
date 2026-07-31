@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 
-const MODEL_URL = "https://justadudewhohacks.github.io/face-api.js/models";
+const MODEL_URL = "/models";
 
 export function SmileVerify({ onVerified }: { onVerified: () => void }) {
   const { t } = useI18n();
