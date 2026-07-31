@@ -91,8 +91,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Chavez Banco — Banco digital premium do Brasil" },
       { name: "twitter:description", content: "Abra sua conta Chavez Banco e tenha PIX, TED, cartões e segurança bancária. 100% digital." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/85d25e90-293f-44eb-8075-e9579460b85b" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/85d25e90-293f-44eb-8075-e9579460b85b" },
+      { property: "og:image", content: "https://www.chavezbanco.online/og-image.png" },
+{ property: "og:image:width", content: "1200" },
+{ property: "og:image:height", content: "630" },
+{ name: "twitter:image", content: "https://www.chavezbanco.online/og-image.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
