@@ -145,11 +145,8 @@ function SupportPage() {
                 m.from_admin ? "bg-accent text-foreground" : "bg-gradient-primary text-primary-foreground"
               }`}
             >
-              {m.image_url && (
-                <a href={m.image_url} target="_blank" rel="noreferrer">
-                  <img src={m.image_url} alt="anexo" className="mb-2 max-h-56 rounded-lg" />
-                </a>
-              )}
+              {m.image_url && <ReceiptAttachment imageRef={m.image_url} />}
+
               <div className="whitespace-pre-wrap">{m.body}</div>
               <div className={`text-[10px] mt-1 ${m.from_admin ? "text-muted-foreground" : "text-white/70"}`}>
                 {new Date(m.created_at).toLocaleString("pt-BR")}
