@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/toast";
 import { Send, Paperclip, X } from "lucide-react";
+import { ReceiptAttachment } from "@/components/receipt-viewer";
 
 export const Route = createFileRoute("/_authenticated/support")({
   head: () => ({
