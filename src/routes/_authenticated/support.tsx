@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/toast";
 import { Send, Paperclip, X } from "lucide-react";
+import { ReceiptAttachment } from "@/components/receipt-viewer";
 
 export const Route = createFileRoute("/_authenticated/support")({
   head: () => ({
@@ -73,16 +74,21 @@ function SupportPage() {
     let imageUrl: string | null = null;
     if (file) {
       try {
-        const path = `${userId}/${Date.now()}-${file.name}`;
-        const { error: upErr } = await supabase.storage.from("support").upload(path, file, { upsert: false });
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `${userId}/${Date.now()}-${safeName}`;
+        const { error: upErr } = await supabase.storage
+          .from("support")
+          .upload(path, file, { upsert: false, contentType: file.type || undefined });
         if (upErr) throw upErr;
-        const { data: signed } = await supabase.storage.from("support").createSignedUrl(path, 60 * 60 * 24 * 30);
-        imageUrl = signed?.signedUrl ?? null;
+        // Store the storage path (not a short-lived signed URL) so the original
+        // file can always be re-signed at view time.
+        imageUrl = path;
       } catch (e: any) {
         setSending(false);
         return toast.push("error", e.message ?? "Falha no upload");
       }
     }
+
 
     const { error } = await supabase.from("support_messages").insert({
       user_id: userId,
@@ -140,11 +146,8 @@ function SupportPage() {
                 m.from_admin ? "bg-accent text-foreground" : "bg-gradient-primary text-primary-foreground"
               }`}
             >
-              {m.image_url && (
-                <a href={m.image_url} target="_blank" rel="noreferrer">
-                  <img src={m.image_url} alt="anexo" className="mb-2 max-h-56 rounded-lg" />
-                </a>
-              )}
+              {m.image_url && <ReceiptAttachment imageRef={m.image_url} />}
+
               <div className="whitespace-pre-wrap">{m.body}</div>
               <div className={`text-[10px] mt-1 ${m.from_admin ? "text-muted-foreground" : "text-white/70"}`}>
                 {new Date(m.created_at).toLocaleString("pt-BR")}
