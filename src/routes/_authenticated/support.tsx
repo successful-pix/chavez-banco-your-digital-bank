@@ -73,16 +73,21 @@ function SupportPage() {
     let imageUrl: string | null = null;
     if (file) {
       try {
-        const path = `${userId}/${Date.now()}-${file.name}`;
-        const { error: upErr } = await supabase.storage.from("support").upload(path, file, { upsert: false });
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `${userId}/${Date.now()}-${safeName}`;
+        const { error: upErr } = await supabase.storage
+          .from("support")
+          .upload(path, file, { upsert: false, contentType: file.type || undefined });
         if (upErr) throw upErr;
-        const { data: signed } = await supabase.storage.from("support").createSignedUrl(path, 60 * 60 * 24 * 30);
-        imageUrl = signed?.signedUrl ?? null;
+        // Store the storage path (not a short-lived signed URL) so the original
+        // file can always be re-signed at view time.
+        imageUrl = path;
       } catch (e: any) {
         setSending(false);
         return toast.push("error", e.message ?? "Falha no upload");
       }
     }
+
 
     const { error } = await supabase.from("support_messages").insert({
       user_id: userId,
