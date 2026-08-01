@@ -22,6 +22,7 @@ import {
 import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/components/toast";
 import { Search, Shield, FileCheck, MessageSquare, Wallet, Ban, ArrowLeftRight } from "lucide-react";
+import { ReceiptAttachment } from "@/components/receipt-viewer";
 
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -605,9 +606,7 @@ function SupportTab() {
               {conv.map((m) => (
                 <div key={m.id} className={`flex ${m.from_admin ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                   <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${m.from_admin ? "bg-gradient-primary text-primary-foreground" : "bg-accent"}`}>
-                    {m.image_url && (
-                      <img src={m.image_url} alt="anexo" className="mb-2 max-h-56 rounded-lg" />
-                    )}
+                    {m.image_url && <ReceiptAttachment imageRef={m.image_url} />}
                     <div className="whitespace-pre-wrap">{m.body}</div>
                     <div className={`text-[10px] mt-1 ${m.from_admin ? "text-white/70" : "text-muted-foreground"}`}>
                       {new Date(m.created_at).toLocaleString("pt-BR")}
