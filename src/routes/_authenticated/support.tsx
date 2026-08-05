@@ -1,9 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/toast";
 import { Send, Paperclip, X } from "lucide-react";
 import { ReceiptAttachment } from "@/components/receipt-viewer";
+import { playNotificationSound } from "@/lib/notify-sound";
+import { notifySupportTeam } from "@/lib/support-notify.functions";
+
 
 export const Route = createFileRoute("/_authenticated/support")({
   head: () => ({
