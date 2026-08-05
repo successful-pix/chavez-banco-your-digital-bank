@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   adminListUsers,
   adminListKyc,
@@ -23,6 +23,8 @@ import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/components/toast";
 import { Search, Shield, FileCheck, MessageSquare, Wallet, Ban, ArrowLeftRight } from "lucide-react";
 import { ReceiptAttachment } from "@/components/receipt-viewer";
+import { supabase } from "@/integrations/supabase/client";
+import { playNotificationSound } from "@/lib/notify-sound";
 
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -469,13 +471,47 @@ function SupportTab() {
   const [selected, setSelected] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
+  const [unreadBy, setUnreadBy] = useState<Record<string, number>>({});
+  const alerted = useRef<Set<string>>(new Set());
+  const primed = useRef(false);
 
   async function refresh() {
     const [d, n] = await Promise.all([listSupport(), listProfiles()]);
-    setRows(d as any[]);
+    const list = d as any[];
+    setRows(list);
     setNames(n as any);
+
+    const incoming = list.filter((m) => !m.from_admin);
+    if (!primed.current) {
+      incoming.forEach((m) => alerted.current.add(m.id));
+      primed.current = true;
+    } else {
+      const fresh = incoming.filter((m) => !alerted.current.has(m.id));
+      if (fresh.length > 0) {
+        fresh.forEach((m) => alerted.current.add(m.id));
+        setUnreadBy((prev) => {
+          const next = { ...prev };
+          for (const m of fresh) next[m.user_id] = (next[m.user_id] ?? 0) + 1;
+          return next;
+        });
+        playNotificationSound();
+        const who = (n as any)?.[fresh[0].user_id]?.full_name ?? "cliente";
+        toast.push("info", `Nova mensagem de suporte de ${who}`);
+      }
+    }
   }
   useEffect(() => { refresh().catch(() => {}); }, []);
+
+  // Realtime: single subscription for the admin inbox.
+  useEffect(() => {
+    const ch = supabase
+      .channel("admin-support-inbox")
+      .on("postgres_changes", { event: "*", schema: "public", table: "support_messages" }, () => {
+        refresh().catch(() => {});
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
 
 
   const grouped = useMemo(() => {
@@ -550,7 +586,10 @@ function SupportTab() {
             return (
               <button
                 key={uid}
-                onClick={() => setSelected(uid)}
+                onClick={() => {
+                  setSelected(uid);
+                  setUnreadBy((prev) => { const n2 = { ...prev }; delete n2[uid]; return n2; });
+                }}
                 className={`w-full text-left p-3 hover:bg-accent transition ${selected === uid ? "bg-accent" : ""}`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -560,6 +599,9 @@ function SupportTab() {
                   </div>
 
                   <div className="flex gap-1">
+                    {(unreadBy[uid] ?? 0) > 0 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary text-primary-foreground">{unreadBy[uid]}</span>
+                    )}
                     {latest.priority && latest.priority !== "normal" && (
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                         latest.priority === "urgent" ? "bg-destructive text-destructive-foreground" :

@@ -1,9 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/toast";
 import { Send, Paperclip, X } from "lucide-react";
 import { ReceiptAttachment } from "@/components/receipt-viewer";
+import { playNotificationSound } from "@/lib/notify-sound";
+import { notifySupportTeam } from "@/lib/support-notify.functions";
+
 
 export const Route = createFileRoute("/_authenticated/support")({
   head: () => ({
@@ -28,13 +32,18 @@ type Msg = {
 
 function SupportPage() {
   const toast = useToast();
+  const notifyTeam = useServerFn(notifySupportTeam);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [unread, setUnread] = useState(0);
   const endRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  // Ids of admin messages already alerted on — prevents repeat sounds/toasts
+  const alerted = useRef<Set<string>>(new Set());
+  const primed = useRef(false);
 
   async function load(uid: string) {
     const { data } = await supabase
@@ -42,18 +51,36 @@ function SupportPage() {
       .select("id, from_admin, subject, body, image_url, status, priority, created_at")
       .eq("user_id", uid)
       .order("created_at", { ascending: true });
-    if (data) setMsgs(data as unknown as Msg[]);
+    if (data) {
+      const rows = data as unknown as Msg[];
+      setMsgs(rows);
+      const incoming = rows.filter((m) => m.from_admin);
+      if (!primed.current) {
+        // First load: remember existing messages without alerting.
+        incoming.forEach((m) => alerted.current.add(m.id));
+        primed.current = true;
+      } else {
+        const fresh = incoming.filter((m) => !alerted.current.has(m.id));
+        if (fresh.length > 0) {
+          fresh.forEach((m) => alerted.current.add(m.id));
+          setUnread((u) => u + fresh.length);
+          playNotificationSound();
+          toast.push("info", "Nova resposta do suporte");
+        }
+      }
+    }
     setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   }
 
   useEffect(() => {
+    let ch: ReturnType<typeof supabase.channel> | null = null;
     (async () => {
       const { data: s } = await supabase.auth.getUser();
       if (!s.user) return;
       setUserId(s.user.id);
       await load(s.user.id);
 
-      const ch = supabase
+      ch = supabase
         .channel(`support-${s.user.id}`)
         .on(
           "postgres_changes",
@@ -61,10 +88,10 @@ function SupportPage() {
           () => load(s.user!.id),
         )
         .subscribe();
-      return () => {
-        supabase.removeChannel(ch);
-      };
     })();
+    return () => {
+      if (ch) supabase.removeChannel(ch);
+    };
   }, []);
 
   async function send() {
@@ -90,20 +117,30 @@ function SupportPage() {
     }
 
 
-    const { error } = await supabase.from("support_messages").insert({
+    const { data: inserted, error } = await supabase.from("support_messages").insert({
       user_id: userId,
       from_admin: false,
       body: text.trim() || "(anexo)",
       image_url: imageUrl,
       status: "open",
-    });
+    }).select("id").maybeSingle();
     setSending(false);
     if (error) return toast.push("error", error.message);
     setText("");
     setFile(null);
     if (fileRef.current) fileRef.current.value = "";
     await load(userId);
+
+    // Notify the support team by email (server-side; deduped by message id).
+    if (inserted?.id) {
+      const key = `chavez.support.notified.${inserted.id}`;
+      if (!localStorage.getItem(key)) {
+        localStorage.setItem(key, "1");
+        notifyTeam({ data: { messageId: inserted.id as string } }).catch(() => {});
+      }
+    }
   }
+
 
   const currentStatus = msgs[msgs.length - 1]?.status ?? "open";
   const currentPriority = msgs[msgs.length - 1]?.priority ?? "normal";
@@ -116,7 +153,20 @@ function SupportPage() {
           <p className="text-sm text-muted-foreground">Respondemos em até 24h úteis.</p>
         </div>
         {msgs.length > 0 && (
-          <div className="flex gap-1.5">
+          <div className="flex items-center gap-1.5">
+            {unread > 0 && (
+              <button
+                onClick={() => {
+                  setUnread(0);
+                  endRef.current?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="text-[10px] font-bold px-2 py-1 rounded-lg bg-primary text-primary-foreground"
+                title="Ver novas mensagens"
+              >
+                {unread} nova{unread > 1 ? "s" : ""}
+              </button>
+            )}
+
             <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${
               currentStatus === "closed" ? "bg-muted text-muted-foreground" :
               currentStatus === "pending" ? "bg-primary/10 text-primary" :

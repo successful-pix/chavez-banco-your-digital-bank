@@ -97,7 +97,27 @@ export const emails = {
   supportReply: (to: string, name: string, snippet: string) =>
     send(to, "Nova resposta do suporte Chavez", shell("Nova mensagem do suporte",
       `<p>Olá <b>${name}</b>,</p><p>Você recebeu uma nova resposta do time de suporte:</p>
-       <blockquote style="border-left:3px solid ${BRAND_PRIMARY};padding:8px 14px;background:#f5f7fb;border-radius:8px">${snippet.replace(/</g, "&lt;")}</blockquote>`)),
+       <blockquote style="border-left:3px solid ${BRAND_PRIMARY};padding:8px 14px;background:#f5f7fb;border-radius:8px">${snippet.replace(/</g, "&lt;")}</blockquote>
+       <p style="margin-top:20px"><a href="https://chavezbanco.online/support" style="background:${BRAND_PRIMARY};color:#fff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:700">Abrir conversa no Suporte</a></p>`)),
+
+  supportNewMessageToTeam: (
+    to: string,
+    customerName: string,
+    customerEmail: string,
+    body: string,
+    when: string,
+    userId: string,
+  ) =>
+    send(to, `Nova mensagem de suporte — ${customerName || customerEmail}`, shell("Nova mensagem de suporte",
+      `<p>Uma nova mensagem de suporte foi recebida na <b>Chavez Banco</b>.</p>
+       <table role="presentation" cellpadding="0" cellspacing="0" style="font-size:14px;margin:12px 0">
+         <tr><td style="padding:4px 12px 4px 0;color:#64748b">Cliente</td><td><b>${(customerName || "—").replace(/</g, "&lt;")}</b></td></tr>
+         <tr><td style="padding:4px 12px 4px 0;color:#64748b">E-mail</td><td>${customerEmail.replace(/</g, "&lt;")}</td></tr>
+         <tr><td style="padding:4px 12px 4px 0;color:#64748b">Data/hora</td><td>${when}</td></tr>
+       </table>
+       <blockquote style="border-left:3px solid ${BRAND_GOLD};padding:8px 14px;background:#f5f7fb;border-radius:8px">${body.replace(/</g, "&lt;")}</blockquote>
+       <p style="margin-top:20px"><a href="https://chavezbanco.online/admin?tab=support&user=${userId}" style="background:${BRAND_PRIMARY};color:#fff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:700">Abrir conversa no painel</a></p>`)),
+
 
   kycStatus: (to: string, name: string, status: "approved" | "rejected" | "pending", notes?: string | null) => {
     const map = { approved: "aprovada", rejected: "rejeitada", pending: "pendente" } as const;
