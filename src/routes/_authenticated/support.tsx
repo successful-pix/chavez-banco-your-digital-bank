@@ -153,7 +153,20 @@ function SupportPage() {
           <p className="text-sm text-muted-foreground">Respondemos em até 24h úteis.</p>
         </div>
         {msgs.length > 0 && (
-          <div className="flex gap-1.5">
+          <div className="flex items-center gap-1.5">
+            {unread > 0 && (
+              <button
+                onClick={() => {
+                  setUnread(0);
+                  endRef.current?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="text-[10px] font-bold px-2 py-1 rounded-lg bg-primary text-primary-foreground"
+                title="Ver novas mensagens"
+              >
+                {unread} nova{unread > 1 ? "s" : ""}
+              </button>
+            )}
+
             <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${
               currentStatus === "closed" ? "bg-muted text-muted-foreground" :
               currentStatus === "pending" ? "bg-primary/10 text-primary" :
