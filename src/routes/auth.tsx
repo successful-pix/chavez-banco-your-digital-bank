@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +10,17 @@ import { SmileVerify } from "@/components/smile-verify";
 import { useToast } from "@/components/toast";
 import { PasswordInput } from "@/components/password-input";
 import { notifyWelcome, notifyLogin, sendVerificationCode, verifyCode } from "@/lib/user.functions";
+import { Fingerprint, X as XIcon } from "lucide-react";
+import {
+  getSavedAccounts,
+  saveAccount,
+  forgetAccount,
+  biometricSupported,
+  enrollBiometric,
+  refreshBiometricTokens,
+  unlockWithBiometric,
+  type SavedAccount,
+} from "@/lib/saved-logins";
 
 const searchSchema = z.object({
   mode: z.enum(["signin", "signup"]).optional().default("signin"),
@@ -99,6 +110,92 @@ function SignIn() {
   const [needsVerify, setNeedsVerify] = useState(false);
   const [code, setCode] = useState("");
   const [resending, setResending] = useState(false);
+  const [accounts, setAccounts] = useState<SavedAccount[]>([]);
+  const [picked, setPicked] = useState<SavedAccount | null>(null);
+  const [rememberBio, setRememberBio] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
+
+  useEffect(() => {
+    const list = getSavedAccounts();
+    setAccounts(list);
+    if (list.length) {
+      setPicked(list[0]);
+      setEmail(list[0].email);
+    }
+  }, []);
+
+  function chooseAccount(a: SavedAccount) {
+    setPicked(a);
+    setEmail(a.email);
+    setPw("");
+  }
+
+  function useAnotherAccount() {
+    setPicked(null);
+    setEmail("");
+    setPw("");
+  }
+
+  async function finishSignIn(userId: string, emailUsed: string, fullName?: string) {
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("full_name, email_verified")
+      .eq("id", userId)
+      .maybeSingle();
+    if (prof && (prof as any).email_verified === false) {
+      try { await doSendCode(); } catch { /* ignore */ }
+      setLoading(false);
+      setNeedsVerify(true);
+      toast.push("success", "Enviamos um código para o seu e-mail");
+      return false;
+    }
+    const name = (prof as any)?.full_name || fullName || emailUsed;
+    saveAccount(emailUsed, name);
+    const { data: sess } = await supabase.auth.getSession();
+    const tokens = sess.session
+      ? { access_token: sess.session.access_token, refresh_token: sess.session.refresh_token }
+      : null;
+    if (tokens) {
+      refreshBiometricTokens(emailUsed, tokens);
+      if (rememberBio && biometricSupported()) {
+        try {
+          const ok = await enrollBiometric(emailUsed, name, tokens);
+          if (ok) toast.push("success", "Biometria ativada neste dispositivo");
+        } catch {
+          toast.push("error", "Não foi possível ativar a biometria");
+        }
+      }
+    }
+    return true;
+  }
+
+  async function signInWithFingerprint(a: SavedAccount) {
+    setBioBusy(true);
+    try {
+      const tokens = await unlockWithBiometric(a.email);
+      if (!tokens) {
+        toast.push("error", "Biometria não reconhecida");
+        return;
+      }
+      const { data, error } = await supabase.auth.setSession(tokens);
+      if (error || !data.session) {
+        toast.push("error", "Sessão expirada — entre com a senha uma vez");
+        return;
+      }
+      saveAccount(a.email, a.name);
+      refreshBiometricTokens(a.email, {
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
+      toast.push("success", "Bem-vindo de volta!");
+      doLoginEmail().catch(() => {});
+      nav({ to: "/dashboard" });
+    } catch {
+      toast.push("error", "Falha na biometria");
+    } finally {
+      setBioBusy(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -111,18 +208,8 @@ function SignIn() {
     }
     // Check email verification on profile before allowing app access
     if (signInRes.user) {
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("email_verified")
-        .eq("id", signInRes.user.id)
-        .maybeSingle();
-      if (prof && (prof as any).email_verified === false) {
-        try { await doSendCode(); } catch { /* ignore */ }
-        setLoading(false);
-        setNeedsVerify(true);
-        toast.push("success", "Enviamos um código para o seu e-mail");
-        return;
-      }
+      const ok = await finishSignIn(signInRes.user.id, email.trim().toLowerCase());
+      if (!ok) return;
     }
     setLoading(false);
     toast.push("success", "Bem-vindo!");
@@ -189,8 +276,73 @@ function SignIn() {
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <Input label={t("auth.email")} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+      {accounts.length > 0 && (
+        <div className="space-y-2">
+          <span className="text-xs font-semibold text-foreground/80">Contas salvas neste dispositivo</span>
+          {accounts.map((a) => (
+            <div
+              key={a.email}
+              className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition ${
+                picked?.email === a.email ? "border-primary bg-accent/60" : "border-border hover:bg-accent/40"
+              }`}
+            >
+              <button type="button" onClick={() => chooseAccount(a)} className="flex flex-1 items-center gap-3 min-w-0 text-left">
+                <span className="h-9 w-9 shrink-0 rounded-full bg-gradient-primary text-primary-foreground grid place-items-center text-sm font-black">
+                  {(a.name || a.email).charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-bold text-foreground">{a.name || a.email}</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">{a.email}</span>
+                </span>
+              </button>
+              {a.biometric && (
+                <button
+                  type="button"
+                  disabled={bioBusy}
+                  onClick={() => signInWithFingerprint(a)}
+                  title="Entrar com biometria"
+                  className="rounded-xl border border-primary/40 bg-primary/10 p-2 text-primary disabled:opacity-60"
+                >
+                  <Fingerprint className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  forgetAccount(a.email);
+                  const list = getSavedAccounts();
+                  setAccounts(list);
+                  if (picked?.email === a.email) useAnotherAccount();
+                }}
+                title="Remover conta salva"
+                className="rounded-lg p-1 text-muted-foreground hover:bg-accent"
+              >
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+          {picked && (
+            <button type="button" onClick={useAnotherAccount} className="text-xs font-semibold text-primary hover:underline">
+              Usar outra conta
+            </button>
+          )}
+        </div>
+      )}
+
+      {picked ? (
+        <div className="rounded-xl bg-accent/50 px-3 py-2 text-xs font-semibold text-foreground/80">
+          Entrando como <b>{picked.name || picked.email}</b>
+        </div>
+      ) : (
+        <Input label={t("auth.email")} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+      )}
       <PasswordInput label={t("auth.password")} required value={pw} onChange={(e) => setPw(e.target.value)} />
+      {biometricSupported() && (
+        <label className="flex items-center gap-2 text-xs font-semibold text-foreground/80">
+          <input type="checkbox" checked={rememberBio} onChange={(e) => setRememberBio(e.target.checked)} className="h-4 w-4 accent-primary" />
+          Ativar entrada por biometria neste dispositivo
+        </label>
+      )}
       <button
         disabled={loading}
         className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60"

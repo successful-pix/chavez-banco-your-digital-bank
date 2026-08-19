@@ -20,6 +20,7 @@ export default defineConfig({
         devOptions: { enabled: false },
         includeAssets: ["favicon.ico", "apple-touch-icon.png", "icon-192.png", "icon-512.png"],
         workbox: {
+          importScripts: ["/notification-click.js"],
           navigateFallback: "/",
           navigateFallbackDenylist: [/^\/api\//, /^\/~oauth/],
           runtimeCaching: [
