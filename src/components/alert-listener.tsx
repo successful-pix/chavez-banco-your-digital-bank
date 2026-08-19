@@ -6,8 +6,9 @@ import { fireAlert, ensureNotificationPermission, primeAlertAudio, playLoudRing 
 import { formatBRL } from "@/lib/currency";
 
 /**
- * Global listener: loud ringing alert + phone-screen notification for
- * support replies, and credit/debit alerts. Purely additive — no backend change.
+ * Global listener: Chavez Banco notification sound + phone-screen
+ * notification for support replies and credit/debit alerts.
+ * Purely additive — no backend change.
  */
 export function AlertListener() {
   const toast = useToast();
