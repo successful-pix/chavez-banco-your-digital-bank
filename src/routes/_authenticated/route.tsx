@@ -6,6 +6,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n";
 import { Home, Send, CreditCard, User, Bell, MessageSquare, ShieldCheck, Shield, Menu, X, LogOut, Lock } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AlertListener } from "@/components/alert-listener";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -214,6 +215,8 @@ function Shell() {
           </aside>
         </div>
       )}
+
+      <AlertListener />
 
       <main className="mx-auto max-w-6xl px-4 py-6 pb-24 md:pb-8"><Outlet /></main>
 
