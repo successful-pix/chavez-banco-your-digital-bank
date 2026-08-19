@@ -1,71 +1,122 @@
-// Short, professional in-app notification chime using WebAudio (no assets to download).
-// Autoplay-safe: if the AudioContext is blocked, we resume it on the first user gesture.
+// Chavez Banco notification sound.
+// Plays the custom WAV file from /public.
+//
+// File location:
+// public/chavez-bank-notification.wav
 
-let ctx: AudioContext | null = null;
+let audio: HTMLAudioElement | null = null;
 let unlocked = false;
 let pending = false;
 
-function ensureCtx(): AudioContext | null {
+function getAudio(): HTMLAudioElement | null {
   if (typeof window === "undefined") return null;
-  const AC = window.AudioContext || (window as any).webkitAudioContext;
-  if (!AC) return null;
-  if (!ctx) ctx = new AC();
-  return ctx;
+
+  if (!audio) {
+    audio = new Audio("/chavez-bank-notification.wav");
+    audio.preload = "auto";
+    audio.volume = 0.85;
+  }
+
+  return audio;
 }
 
-function bindUnlock() {
+/**
+ * Prepare/unlock audio after the user's first interaction.
+ */
+export function primeNotificationSound() {
   if (typeof window === "undefined" || unlocked) return;
-  const handler = () => {
-    unlocked = true;
-    const c = ensureCtx();
-    c?.resume().then(() => {
+
+  const unlock = async () => {
+    const player = getAudio();
+
+    if (!player) return;
+
+    try {
+      player.volume = 0;
+      player.currentTime = 0;
+
+      await player.play();
+
+      player.pause();
+      player.currentTime = 0;
+      player.volume = 0.85;
+
+      unlocked = true;
+
       if (pending) {
         pending = false;
-        chime();
+        playNotificationSound();
       }
-    }).catch(() => {});
-    window.removeEventListener("pointerdown", handler);
-    window.removeEventListener("keydown", handler);
+    } catch {
+      unlocked = false;
+    }
   };
-  window.addEventListener("pointerdown", handler, { once: true });
-  window.addEventListener("keydown", handler, { once: true });
+
+  window.addEventListener("pointerdown", unlock, {
+    once: true,
+  });
+
+  window.addEventListener("keydown", unlock, {
+    once: true,
+  });
+
+  window.addEventListener("touchstart", unlock, {
+    once: true,
+  });
 }
 
-function blip(c: AudioContext, freq: number, at: number, dur = 0.12) {
-  const osc = c.createOscillator();
-  const gain = c.createGain();
-  osc.type = "sine";
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.0001, at);
-  gain.gain.exponentialRampToValueAtTime(0.06, at + 0.015);
-  gain.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-  osc.connect(gain).connect(c.destination);
-  osc.start(at);
-  osc.stop(at + dur + 0.02);
-}
-
-function chime() {
-  const c = ensureCtx();
-  if (!c) return;
-  const t = c.currentTime + 0.01;
-  blip(c, 880, t);
-  blip(c, 1174.66, t + 0.13);
-}
-
-/** Play a short notification sound. Silently degrades if autoplay is blocked. */
+/**
+ * Play the Chavez Banco notification sound.
+ */
 export function playNotificationSound() {
-  const c = ensureCtx();
-  if (!c) return;
-  if (c.state === "suspended") {
+  const player = getAudio();
+
+  if (!player) return;
+
+  if (!unlocked) {
     pending = true;
-    bindUnlock();
-    c.resume().then(() => {
-      if (pending) {
-        pending = false;
-        chime();
-      }
-    }).catch(() => {});
+    primeNotificationSound();
     return;
   }
-  chime();
+
+  try {
+    player.pause();
+    player.currentTime = 0;
+    player.volume = 0.85;
+
+    const promise = player.play();
+
+    promise.catch(() => {
+      pending = true;
+      unlocked = false;
+      primeNotificationSound();
+    });
+  } catch {
+    pending = true;
+    unlocked = false;
+    primeNotificationSound();
+  }
+}
+
+/**
+ * Play the notification sound multiple times if needed.
+ */
+export function playNotificationSoundMultiple(
+  count = 1
+) {
+  const total = Math.max(1, Math.min(count, 3));
+
+  let current = 0;
+
+  const play = () => {
+    current += 1;
+
+    playNotificationSound();
+
+    if (current < total) {
+      window.setTimeout(play, 1200);
+    }
+  };
+
+  play();
 }
