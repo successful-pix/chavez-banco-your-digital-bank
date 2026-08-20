@@ -34,11 +34,36 @@ function NotificationsPage() {
     load();
   }, []);
 
+  // Live-append new notifications for the signed-in user.
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    (async () => {
+      const { data: s } = await supabase.auth.getUser();
+      if (!s.user) return;
+      channel = supabase
+        .channel(`notifications-page-${s.user.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${s.user.id}` },
+          () => load(),
+        )
+        .subscribe();
+    })();
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
+
   async function markAll() {
     const { data: s } = await supabase.auth.getUser();
     if (!s.user) return;
     await supabase.from("notifications").update({ read: true }).eq("user_id", s.user.id).eq("read", false);
     load();
+  }
+
+  async function markOne(id: string) {
+    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    await supabase.from("notifications").update({ read: true }).eq("id", id);
   }
 
   return (
