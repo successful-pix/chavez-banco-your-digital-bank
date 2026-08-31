@@ -1,14 +1,10 @@
-// Guarded service-worker registration wrapper.
-// Only registers /sw.js in production and outside Lovable preview/iframe/dev contexts.
-// Falls back to unregistering any stale registration to avoid breaking preview.
-
+// Safe PWA registration. A missing service worker must never break the app.
 export function registerPwa() {
-  if (typeof window === "undefined") return;
-  if (!("serviceWorker" in navigator)) return;
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
   const isProd = import.meta.env.PROD;
-  const inIframe = window.self !== window.top;
   const host = window.location.hostname;
+  const inIframe = window.self !== window.top;
   const killSwitch = new URLSearchParams(window.location.search).get("sw") === "off";
 
   const isPreviewHost =
@@ -21,24 +17,28 @@ export function registerPwa() {
     host === "beta.lovable.dev" ||
     host.endsWith(".beta.lovable.dev");
 
-  const refuse = !isProd || inIframe || isPreviewHost || killSwitch;
-
-  if (refuse) {
+  if (!isProd || inIframe || isPreviewHost || killSwitch) {
     navigator.serviceWorker.getRegistrations().then((regs) => {
-      for (const r of regs) {
-        if (r.active?.scriptURL?.endsWith("/sw.js")) r.unregister();
-      }
+      regs.forEach((registration) => {
+        if (registration.active?.scriptURL.endsWith("/sw.js")) {
+          registration.unregister().catch(() => {});
+        }
+      });
     }).catch(() => {});
     return;
   }
 
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
-  });
+  const register = () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
+      // PWA is optional. Never surface a service-worker failure to the app.
+    });
+  };
+
+  if (document.readyState === "complete") register();
+  else window.addEventListener("load", register, { once: true });
 }
 
 type BIPEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
-
 let deferredPrompt: BIPEvent | null = null;
 
 export function initInstallPrompt() {
@@ -60,8 +60,13 @@ export function canInstall() {
 
 export async function promptInstall() {
   if (!deferredPrompt) return false;
-  await deferredPrompt.prompt();
-  const choice = await deferredPrompt.userChoice;
-  deferredPrompt = null;
-  return choice.outcome === "accepted";
+  try {
+    await deferredPrompt.prompt();
+    const choice = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    return choice.outcome === "accepted";
+  } catch {
+    deferredPrompt = null;
+    return false;
+  }
 }
