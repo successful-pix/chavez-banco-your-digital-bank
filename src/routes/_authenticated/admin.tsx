@@ -35,12 +35,20 @@ export const Route = createFileRoute("/_authenticated/admin")({
     ],
   }),
   beforeLoad: async () => {
-    try {
-      const res = await meIsAdmin();
-      if (!res.isAdmin) throw redirect({ to: "/dashboard" });
-    } catch {
-      throw redirect({ to: "/dashboard" });
-    }
+    const res = await meIsAdmin().catch(() => ({ isAdmin: false }));
+    if (res.isAdmin) return;
+
+    // Fallback to the authenticated browser session. This prevents a transient
+    // server-function failure from incorrectly sending a real admin to /dashboard.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw redirect({ to: "/dashboard" });
+    const { data: role } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (!role) throw redirect({ to: "/dashboard" });
   },
   component: AdminPage,
 });
