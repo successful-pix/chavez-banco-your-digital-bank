@@ -9,10 +9,7 @@ import { playNotificationSound } from "@/lib/notify-sound";
 import { notifySupportTeam } from "@/lib/support-notify.functions";
 
 export const Route = createFileRoute("/_authenticated/support")({
-  head: () => ({ meta: [
-    { title: "Suporte — Chavez Banco" },
-    { name: "description", content: "Fale com o time de suporte Chavez Banco." },
-  ] }),
+  head: () => ({ head: undefined, meta: [{ title: "Suporte — Chavez Banco" }, { name: "description", content: "Fale com o time de suporte Chavez Banco." }] }),
   component: SupportPage,
 });
 
@@ -34,7 +31,8 @@ function SupportPage() {
   const primed = useRef(false);
 
   async function load(uid: string) {
-    const { data } = await supabase.from("support_messages").select("id, from_admin, subject, body, image_url, status, priority, created_at").eq("user_id", uid).order("created_at", { ascending: true });
+    const { data, error } = await supabase.from("support_messages").select("id, from_admin, subject, body, image_url, status, priority, created_at").eq("user_id", uid).order("created_at", { ascending: true });
+    if (error) { console.error("support load failed", error); return; }
     if (data) {
       const rows = data as unknown as Msg[];
       setMsgs(rows);
@@ -61,12 +59,30 @@ function SupportPage() {
   }, []);
 
   async function copyMessage(message: Msg) {
+    const value = message.body || "";
+    if (!value) return;
     try {
-      await navigator.clipboard.writeText(message.body);
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const area = document.createElement("textarea");
+        area.value = value;
+        area.setAttribute("readonly", "true");
+        area.style.position = "fixed";
+        area.style.left = "-9999px";
+        area.style.top = "0";
+        document.body.appendChild(area);
+        area.focus();
+        area.select();
+        const copied = document.execCommand("copy");
+        document.body.removeChild(area);
+        if (!copied) throw new Error("Clipboard unavailable");
+      }
       setCopiedId(message.id);
       window.setTimeout(() => setCopiedId((current) => current === message.id ? null : current), 1500);
-    } catch {
-      toast.push("error", "Não foi possível copiar a mensagem");
+    } catch (error) {
+      console.error("support copy failed", error);
+      toast.push("error", "Não foi possível copiar a mensagem. Tente novamente.");
     }
   }
 
@@ -107,7 +123,6 @@ function SupportPage() {
           {currentPriority && currentPriority !== "normal" && <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${currentPriority === "urgent" ? "bg-destructive text-destructive-foreground" : currentPriority === "high" ? "bg-gradient-gold text-primary-foreground" : "bg-accent"}`}>{currentPriority}</span>}
         </div>}
       </div>
-
       <div className="flex-1 overflow-y-auto rounded-2xl border bg-card shadow-card p-4 space-y-3">
         {msgs.length === 0 && <p className="text-center text-sm text-muted-foreground py-10">Envie sua primeira mensagem para o suporte.</p>}
         {msgs.map((m) => (
@@ -117,14 +132,7 @@ function SupportPage() {
               <div className="whitespace-pre-wrap">{m.body}</div>
               <div className={`mt-2 flex items-center justify-between gap-3 ${m.from_admin ? "text-muted-foreground" : "text-white/70"}`}>
                 <span className="text-[10px]">{new Date(m.created_at).toLocaleString("pt-BR")}</span>
-                <button
-                  type="button"
-                  data-allow-copy
-                  onClick={() => copyMessage(m)}
-                  className={`inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold transition ${m.from_admin ? "hover:bg-background/70" : "hover:bg-white/10"}`}
-                  title="Copiar mensagem"
-                  aria-label="Copiar mensagem"
-                >
+                <button type="button" data-allow-copy onClick={(event) => { event.preventDefault(); event.stopPropagation(); void copyMessage(m); }} className={`inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold transition ${m.from_admin ? "hover:bg-background/70" : "hover:bg-white/10"}`} title="Copiar mensagem" aria-label="Copiar mensagem">
                   {copiedId === m.id ? <><Check className="h-3 w-3" /> Copiado</> : <><Copy className="h-3 w-3" /> Copiar</>}
                 </button>
               </div>
@@ -133,9 +141,7 @@ function SupportPage() {
         ))}
         <div ref={endRef} />
       </div>
-
       {file && <div className="mt-2 flex items-center gap-2 rounded-xl border bg-accent px-3 py-2 text-xs"><Paperclip className="h-3.5 w-3.5" /><span className="truncate flex-1">{file.name}</span><button onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ""; }}><X className="h-3.5 w-3.5" /></button></div>}
-
       <div className="mt-3 flex items-end gap-2">
         <button onClick={() => fileRef.current?.click()} className="rounded-2xl border p-3 hover:bg-accent transition" title="Anexar imagem"><Paperclip className="h-4 w-4" /></button>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
