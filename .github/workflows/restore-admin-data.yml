@@ -1,0 +1,71 @@
+name: Restore admin data views
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore admin data tabs
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/routes/_authenticated/admin.tsx')
+          s = p.read_text()
+          marker = '// ADMIN_DATA_VIEWS_RESTORED'
+          if marker in s:
+              print('Admin data views already restored')
+              raise SystemExit(0)
+
+          s = s.replace('  adminListSupportProfiles,\n  meIsAdmin,', '  adminListSupportProfiles,\n  adminListTransactions,\n  adminListNotifications,\n  meIsAdmin,')
+          s = s.replace('type Tab = "users" | "kyc" | "credit" | "transfers" | "blocked" | "support";', 'type Tab = "users" | "kyc" | "credit" | "transfers" | "blocked" | "support" | "transactions" | "notifications";')
+          s = s.replace('    { id: "support", label: "Suporte", icon: MessageSquare },', '    { id: "support", label: "Suporte", icon: MessageSquare },\n    { id: "transactions", label: "Transações", icon: ArrowLeftRight },\n    { id: "notifications", label: "Notificações", icon: MessageSquare },')
+          s = s.replace('      {tab === "support" && <SupportTab />}\n', '      {tab === "support" && <SupportTab />}\n      {tab === "transactions" && <TransactionsTab />}\n      {tab === "notifications" && <NotificationsTab />}\n')
+
+          s += r'''
+
+// ADMIN_DATA_VIEWS_RESTORED
+function TransactionsTab() {
+  const list = useServerFn(adminListTransactions);
+  const [rows, setRows] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { list().then((d) => setRows(d as any[])).catch((e: any) => setError(e?.message ?? "Não foi possível carregar as transações.")); }, []);
+  return <div className="rounded-2xl border bg-card shadow-card overflow-x-auto">
+    {error && <div className="p-4 text-sm text-destructive">{error}</div>}
+    <table className="w-full text-sm"><thead className="bg-accent/50 text-xs uppercase tracking-wider text-muted-foreground"><tr><th className="px-4 py-3 text-left">Data</th><th className="px-4 py-3 text-left">Usuário</th><th className="px-4 py-3 text-left">Tipo</th><th className="px-4 py-3 text-right">Valor</th><th className="px-4 py-3 text-left">Status</th><th className="px-4 py-3 text-left">Descrição</th></tr></thead>
+    <tbody className="divide-y">{rows.map((r) => <tr key={r.id}><td className="px-4 py-3 whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString() : "—"}</td><td className="px-4 py-3 font-mono text-xs">{r.user_id ? String(r.user_id).slice(0, 8) : "—"}</td><td className="px-4 py-3">{r.type ?? "—"}</td><td className="px-4 py-3 text-right font-bold">{r.amount != null ? formatBRL(Number(r.amount)) : "—"}</td><td className="px-4 py-3">{r.status ?? "—"}</td><td className="px-4 py-3">{r.description ?? "—"}</td></tr>)}
+    {rows.length === 0 && !error && <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">Nenhuma transação encontrada.</td></tr>}</tbody></table>
+  </div>;
+}
+
+function NotificationsTab() {
+  const list = useServerFn(adminListNotifications);
+  const [rows, setRows] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { list().then((d) => setRows(d as any[])).catch((e: any) => setError(e?.message ?? "Não foi possível carregar as notificações.")); }, []);
+  return <div className="rounded-2xl border bg-card shadow-card divide-y">
+    {error && <div className="p-4 text-sm text-destructive">{error}</div>}
+    {rows.map((r) => <div key={r.id} className="p-4"><div className="flex justify-between gap-3"><div className="font-semibold">{r.title ?? r.subject ?? "Notificação"}</div><div className="text-xs text-muted-foreground">{r.created_at ? new Date(r.created_at).toLocaleString() : ""}</div></div><div className="text-sm mt-1">{r.message ?? r.body ?? r.content ?? "—"}</div><div className="text-xs text-muted-foreground mt-1">Usuário: {r.user_id ? String(r.user_id).slice(0, 8) : "sistema"}</div></div>)}
+    {rows.length === 0 && !error && <div className="px-4 py-10 text-center text-muted-foreground">Nenhuma notificação encontrada.</div>}
+  </div>;
+}
+'''
+          p.write_text(s)
+          PY
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/routes/_authenticated/admin.tsx
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "restore admin transaction and notification views"
+          git push
