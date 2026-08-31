@@ -3,260 +3,155 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 async function assertAdmin(supabase: any, userId: string) {
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("admin_assert_role");
   if (error) throw error;
-  if (!data) throw new Error("Forbidden: admin only");
+  if (data === false) throw new Error("Forbidden: admin only");
 }
 
-export const adminListUsers = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { data, error } = await context.supabase
-      .from("profiles")
-      .select("id, full_name, email, phone, cpf, agencia, account_number, balance, kyc_status, face_verified, blocked, created_at")
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return data ?? [];
-  });
+export const adminListUsers = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { data, error } = await context.supabase.rpc("admin_list_users");
+  if (error) throw error;
+  return data ?? [];
+});
 
-export const adminListKyc = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { data, error } = await context.supabase
-      .from("kyc_documents")
-      .select("id, user_id, doc_type, storage_path, status, notes, created_at")
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return data ?? [];
-  });
+export const adminListKyc = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { data, error } = await context.supabase.rpc("admin_list_kyc");
+  if (error) throw error;
+  return data ?? [];
+});
 
-export const adminSetKycStatus = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({
-    docId: z.string().uuid(),
-    userId: z.string().uuid(),
-    status: z.enum(["approved", "rejected", "pending"]),
-    notes: z.string().max(500).optional(),
-  }).parse(d))
-  .handler(async ({ context, data }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { error } = await context.supabase
-      .from("kyc_documents")
-      .update({ status: data.status, notes: data.notes ?? null })
-      .eq("id", data.docId);
-    if (error) throw error;
-    if (data.status === "approved" || data.status === "rejected") {
-      const { error: profileError } = await context.supabase
-        .from("profiles")
-        .update({ kyc_status: data.status })
-        .eq("id", data.userId);
-      if (profileError) throw profileError;
-    }
-    return { ok: true };
-  });
+export const adminSetKycStatus = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({
+  docId: z.string().uuid(), userId: z.string().uuid(), status: z.enum(["approved", "rejected", "pending"]), notes: z.string().max(500).optional(),
+}).parse(d)).handler(async ({ context, data }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { error } = await context.supabase.from("kyc_documents").update({ status: data.status, notes: data.notes ?? null }).eq("id", data.docId);
+  if (error) throw error;
+  if (data.status === "approved" || data.status === "rejected") {
+    const { error: profileError } = await context.supabase.from("profiles").update({ kyc_status: data.status }).eq("id", data.userId);
+    if (profileError) throw profileError;
+  }
+  return { ok: true };
+});
 
-export const adminAdjustBalance = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({
-    userId: z.string().uuid(), amount: z.number().positive(),
-    direction: z.enum(["in", "out"]),
-    type: z.enum(["deposit", "withdrawal", "pix", "ted", "doc", "internal", "international_transfer"]),
-    description: z.string().max(300).optional(),
-    sender_name: z.string().max(150).optional(), sender_account: z.string().max(50).optional(), sender_bank: z.string().max(100).optional(),
-    recipient_name: z.string().max(150).optional(), recipient_account: z.string().max(50).optional(), recipient_bank: z.string().max(100).optional(),
-    recipient_agencia: z.string().max(20).optional(), pix_key: z.string().max(150).optional(), created_at: z.string().optional(),
-  }).parse(d))
-  .handler(async ({ context, data }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { data: profile, error: pe } = await context.supabase
-      .from("profiles")
-      .select("balance, full_name, account_number, email")
-      .eq("id", data.userId)
-      .maybeSingle();
-    if (pe) throw pe;
-    if (!profile) throw new Error("User not found");
-    const next = Number(profile.balance) + (data.direction === "in" ? data.amount : -data.amount);
-    if (next < 0) throw new Error("Would result in negative balance");
-    const { data: tx, error: te } = await context.supabase
-      .from("transactions")
-      .insert({
-        user_id: data.userId, type: data.type, direction: data.direction, amount: data.amount,
-        description: data.description ?? null, sender_name: data.sender_name ?? null,
-        sender_account: data.sender_account ?? null, sender_bank: data.sender_bank ?? null,
-        recipient_name: data.recipient_name ?? profile.full_name, recipient_account: data.recipient_account ?? profile.account_number,
-        recipient_bank: data.recipient_bank ?? null, recipient_agencia: data.recipient_agencia ?? null,
-        pix_key: data.pix_key ?? null, status: "completed", ...(data.created_at ? { created_at: data.created_at } : {}),
-      })
-      .select("id")
-      .single();
-    if (te) throw te;
-    const { error: ue } = await context.supabase.from("profiles").update({ balance: next }).eq("id", data.userId);
-    if (ue) throw ue;
-    return { ok: true, transactionId: tx.id, newBalance: next };
-  });
+export const adminAdjustBalance = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({
+  userId: z.string().uuid(), amount: z.number().positive(), direction: z.enum(["in", "out"]), type: z.enum(["deposit", "withdrawal", "pix", "ted", "doc", "internal", "international_transfer"]), description: z.string().max(300).optional(),
+  sender_name: z.string().max(150).optional(), sender_account: z.string().max(50).optional(), sender_bank: z.string().max(100).optional(), recipient_name: z.string().max(150).optional(), recipient_account: z.string().max(50).optional(), recipient_bank: z.string().max(100).optional(), recipient_agencia: z.string().max(20).optional(), pix_key: z.string().max(150).optional(), created_at: z.string().optional(),
+}).parse(d)).handler(async ({ context, data }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { data: profile, error: pe } = await context.supabase.from("profiles").select("balance, full_name, account_number, email").eq("id", data.userId).maybeSingle();
+  if (pe) throw pe;
+  if (!profile) throw new Error("User not found");
+  const next = Number(profile.balance) + (data.direction === "in" ? data.amount : -data.amount);
+  if (next < 0) throw new Error("Would result in negative balance");
+  const { data: tx, error: te } = await context.supabase.from("transactions").insert({ user_id: data.userId, type: data.type, direction: data.direction, amount: data.amount, description: data.description ?? null, sender_name: data.sender_name ?? null, sender_account: data.sender_account ?? null, sender_bank: data.sender_bank ?? null, recipient_name: data.recipient_name ?? profile.full_name, recipient_account: data.recipient_account ?? profile.account_number, recipient_bank: data.recipient_bank ?? null, recipient_agencia: data.recipient_agencia ?? null, pix_key: data.pix_key ?? null, status: "completed", ...(data.created_at ? { created_at: data.created_at } : {}) }).select("id").single();
+  if (te) throw te;
+  const { error: ue } = await context.supabase.from("profiles").update({ balance: next }).eq("id", data.userId);
+  if (ue) throw ue;
+  return { ok: true, transactionId: tx.id, newBalance: next };
+});
 
-export const adminListTransactions = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { data, error } = await context.supabase
-      .from("transactions")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1000);
-    if (error) throw error;
-    return data ?? [];
-  });
+export const adminListTransactions = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { data, error } = await context.supabase.rpc("admin_list_transactions");
+  if (error) throw error;
+  return data ?? [];
+});
 
-export const adminListNotifications = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { data, error } = await context.supabase
-      .from("notifications")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (error) throw error;
-    return data ?? [];
-  });
+export const adminListNotifications = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { data, error } = await context.supabase.rpc("admin_list_notifications");
+  if (error) throw error;
+  return data ?? [];
+});
 
-export const adminReplySupport = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ userId: z.string().uuid(), body: z.string().trim().min(1).max(2000), subject: z.string().max(200).optional() }).parse(d))
-  .handler(async ({ context, data }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { error } = await context.supabase.from("support_messages").insert({
-      user_id: data.userId, from_admin: true, subject: data.subject ?? null, body: data.body,
-      status: "open", read_by_admin: true,
-    });
-    if (error) throw error;
-    return { ok: true };
-  });
+export const adminReplySupport = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ userId: z.string().uuid(), body: z.string().trim().min(1).max(2000), subject: z.string().max(200).optional() }).parse(d)).handler(async ({ context, data }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { error } = await context.supabase.from("support_messages").insert({ user_id: data.userId, from_admin: true, subject: data.subject ?? null, body: data.body, status: "open", read_by_admin: true });
+  if (error) throw error;
+  return { ok: true };
+});
 
-export const adminGrantRole = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ userId: z.string().uuid(), role: z.enum(["admin", "user"]) }).parse(d))
-  .handler(async ({ context, data }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { error } = await context.supabase.from("user_roles").upsert({ user_id: data.userId, role: data.role }, { onConflict: "user_id,role" });
-    if (error) throw error;
-    return { ok: true };
-  });
+export const adminGrantRole = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ userId: z.string().uuid(), role: z.enum(["admin", "user"]) }).parse(d)).handler(async ({ context, data }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { error } = await context.supabase.from("user_roles").upsert({ user_id: data.userId, role: data.role }, { onConflict: "user_id,role" });
+  if (error) throw error;
+  return { ok: true };
+});
 
-export const adminRevokeRole = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ userId: z.string().uuid(), role: z.enum(["admin", "user"]) }).parse(d))
-  .handler(async ({ context, data }) => {
-    await assertAdmin(context.supabase, context.userId);
-    if (data.userId === context.userId && data.role === "admin") throw new Error("Você não pode revogar seu próprio acesso admin.");
-    const { error } = await context.supabase.from("user_roles").delete().eq("user_id", data.userId).eq("role", data.role);
-    if (error) throw error;
-    return { ok: true };
-  });
+export const adminRevokeRole = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ userId: z.string().uuid(), role: z.enum(["admin", "user"]) }).parse(d)).handler(async ({ context, data }) => {
+  await assertAdmin(context.supabase, context.userId);
+  if (data.userId === context.userId && data.role === "admin") throw new Error("Você não pode revogar seu próprio acesso admin.");
+  const { error } = await context.supabase.from("user_roles").delete().eq("user_id", data.userId).eq("role", data.role);
+  if (error) throw error;
+  return { ok: true };
+});
 
-export const adminListRoles = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { data, error } = await context.supabase.from("user_roles").select("user_id, role");
-    if (error) throw error;
-    return data ?? [];
-  });
+export const adminListRoles = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { data, error } = await context.supabase.rpc("admin_list_roles");
+  if (error) throw error;
+  return data ?? [];
+});
 
-export const adminSetTicketStatus = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ userId: z.string().uuid(), status: z.enum(["open", "pending", "closed"]).optional(), priority: z.enum(["low", "normal", "high", "urgent"]).optional() }).parse(d))
-  .handler(async ({ context, data }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const patch: Record<string, string> = {};
-    if (data.status) patch.status = data.status;
-    if (data.priority) patch.priority = data.priority;
-    if (!Object.keys(patch).length) return { ok: true };
-    const { error } = await context.supabase.from("support_messages").update(patch).eq("user_id", data.userId);
-    if (error) throw error;
-    return { ok: true };
-  });
+export const adminSetTicketStatus = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ userId: z.string().uuid(), status: z.enum(["open", "pending", "closed"]).optional(), priority: z.enum(["low", "normal", "high", "urgent"]).optional() }).parse(d)).handler(async ({ context, data }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const patch: Record<string, string> = {};
+  if (data.status) patch.status = data.status;
+  if (data.priority) patch.priority = data.priority;
+  if (!Object.keys(patch).length) return { ok: true };
+  const { error } = await context.supabase.from("support_messages").update(patch).eq("user_id", data.userId);
+  if (error) throw error;
+  return { ok: true };
+});
 
-export const adminListSupport = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { data, error } = await context.supabase
-      .from("support_messages")
-      .select("id, user_id, from_admin, subject, body, image_url, status, priority, read_by_admin, created_at")
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (error) throw error;
-    return data ?? [];
-  });
+export const adminListSupport = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { data, error } = await context.supabase.rpc("admin_list_support");
+  if (error) throw error;
+  return data ?? [];
+});
 
-export const meIsAdmin = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    try {
-      await assertAdmin(context.supabase, context.userId);
-      return { isAdmin: true };
-    } catch (error) {
-      console.error("[admin] role check failed", error);
-      return { isAdmin: false };
-    }
-  });
+export const meIsAdmin = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
+  try { await assertAdmin(context.supabase, context.userId); return { isAdmin: true }; }
+  catch (error) { console.error("[admin] role check failed", error); return { isAdmin: false }; }
+});
 
-export const adminSetBlocked = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ userId: z.string().uuid(), blocked: z.boolean() }).parse(d))
-  .handler(async ({ context, data }) => {
-    await assertAdmin(context.supabase, context.userId);
-    if (data.userId === context.userId && data.blocked) throw new Error("Você não pode bloquear a si mesmo.");
-    const { error } = await context.supabase.from("profiles").update({ blocked: data.blocked }).eq("id", data.userId);
-    if (error) throw error;
-    return { ok: true };
-  });
+export const adminSetBlocked = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ userId: z.string().uuid(), blocked: z.boolean() }).parse(d)).handler(async ({ context, data }) => {
+  await assertAdmin(context.supabase, context.userId);
+  if (data.userId === context.userId && data.blocked) throw new Error("Você não pode bloquear a si mesmo.");
+  const { error } = await context.supabase.from("profiles").update({ blocked: data.blocked }).eq("id", data.userId);
+  if (error) throw error;
+  return { ok: true };
+});
 
-export const adminListPendingTransfers = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { data, error } = await context.supabase.from("transactions").select("*").eq("status", "pending").order("created_at", { ascending: false });
-    if (error) throw error;
-    return data ?? [];
-  });
+export const adminListPendingTransfers = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { data, error } = await context.supabase.rpc("admin_list_pending_transfers");
+  if (error) throw error;
+  return data ?? [];
+});
 
-export const adminApproveTransfer = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ transactionId: z.string().uuid() }).parse(d))
-  .handler(async ({ context, data }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { error } = await context.supabase.from("transactions").update({ status: "completed", approved_by: context.userId, approved_at: new Date().toISOString() }).eq("id", data.transactionId);
-    if (error) throw error;
-    return { ok: true };
-  });
+export const adminApproveTransfer = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ transactionId: z.string().uuid() }).parse(d)).handler(async ({ context, data }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { error } = await context.supabase.from("transactions").update({ status: "completed", approved_by: context.userId, approved_at: new Date().toISOString() }).eq("id", data.transactionId);
+  if (error) throw error;
+  return { ok: true };
+});
 
-export const adminRejectTransfer = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ transactionId: z.string().uuid(), reason: z.string().max(300).optional() }).parse(d))
-  .handler(async ({ context, data }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { error } = await context.supabase.from("transactions").update({ status: "rejected", approved_by: context.userId, approved_at: new Date().toISOString(), rejection_reason: data.reason ?? null }).eq("id", data.transactionId);
-    if (error) throw error;
-    return { ok: true };
-  });
+export const adminRejectTransfer = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ transactionId: z.string().uuid(), reason: z.string().max(300).optional() }).parse(d)).handler(async ({ context, data }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { error } = await context.supabase.from("transactions").update({ status: "rejected", approved_by: context.userId, approved_at: new Date().toISOString(), rejection_reason: data.reason ?? null }).eq("id", data.transactionId);
+  if (error) throw error;
+  return { ok: true };
+});
 
-export const adminListSupportProfiles = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    await assertAdmin(context.supabase, context.userId);
-    const { data: profs, error } = await context.supabase.from("profiles").select("id, full_name, email");
-    if (error) throw error;
-    const map: Record<string, { full_name: string | null; email: string | null }> = {};
-    for (const p of profs ?? []) map[p.id] = { full_name: p.full_name, email: p.email };
-    return map;
-  });
+export const adminListSupportProfiles = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { data, error } = await context.supabase.rpc("admin_list_support_profiles");
+  if (error) throw error;
+  const map: Record<string, { full_name: string | null; email: string | null }> = {};
+  for (const p of data ?? []) map[p.id] = { full_name: p.full_name, email: p.email };
+  return map;
+});
