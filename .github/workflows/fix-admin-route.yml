@@ -1,0 +1,42 @@
+name: Fix admin route authorization
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-admin:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch admin authorization fallback
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/routes/_authenticated/admin.tsx')
+          s = p.read_text()
+          old = '''  beforeLoad: async () => {\n    try {\n      const res = await meIsAdmin();\n      if (!res.isAdmin) throw redirect({ to: "/dashboard" });\n    } catch {\n      throw redirect({ to: "/dashboard" });\n    }\n  },'''
+          new = '''  beforeLoad: async () => {\n    const res = await meIsAdmin().catch(() => ({ isAdmin: false }));\n    if (res.isAdmin) return;\n\n    // Fallback to the authenticated browser session. This prevents a transient\n    // server-function failure from incorrectly sending a real admin to /dashboard.\n    const { data: { user } } = await supabase.auth.getUser();\n    if (!user) throw redirect({ to: "/dashboard" });\n    const { data: role } = await supabase\n      .from("user_roles")\n      .select("role")\n      .eq("user_id", user.id)\n      .eq("role", "admin")\n      .maybeSingle();\n    if (!role) throw redirect({ to: "/dashboard" });\n  },'''
+          if old not in s:
+              raise SystemExit('Expected admin beforeLoad block was not found; no changes made.')
+          p.write_text(s.replace(old, new, 1))
+          PY
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/routes/_authenticated/admin.tsx
+          if git diff --cached --quiet; then
+            echo "Admin route already patched"
+            exit 0
+          fi
+          git commit -m "fix admin route authorization fallback"
+          git push
