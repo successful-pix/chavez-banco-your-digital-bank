@@ -43,14 +43,22 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   useEffect(() => {
     initInstallPrompt(); registerPwa();
-    const preventContextMenu = (event: MouseEvent) => event.preventDefault();
+    const getTarget = (event: Event) => event.target instanceof Element ? event.target : null;
+    const preventContextMenu = (event: MouseEvent) => {
+      const target = getTarget(event);
+      if (target?.closest("[data-allow-context-menu]")) return;
+      event.preventDefault();
+    };
     const preventCopy = (event: ClipboardEvent) => {
-      const target = event.target as HTMLElement | null;
+      const target = getTarget(event);
+      // The support-chat Copy button uses navigator.clipboard. Do not cancel
+      // the browser clipboard event when it originates from an explicitly
+      // permitted copy control.
       if (target?.closest("[data-allow-copy]")) return;
       event.preventDefault();
     };
     const preventCut = (event: ClipboardEvent) => {
-      const target = event.target as HTMLElement | null;
+      const target = getTarget(event);
       if (target?.closest("input, textarea, [contenteditable=\"true\"]")) return;
       event.preventDefault();
     };
