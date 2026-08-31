@@ -42,7 +42,8 @@ function RootShell({ children }: { children: ReactNode }) { return <html lang="p
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   useEffect(() => {
-    initInstallPrompt(); registerPwa();
+    initInstallPrompt();
+    registerPwa();
     const getTarget = (event: Event) => event.target instanceof Element ? event.target : null;
     const preventContextMenu = (event: MouseEvent) => {
       const target = getTarget(event);
@@ -51,9 +52,6 @@ function RootComponent() {
     };
     const preventCopy = (event: ClipboardEvent) => {
       const target = getTarget(event);
-      // The support-chat Copy button uses navigator.clipboard. Do not cancel
-      // the browser clipboard event when it originates from an explicitly
-      // permitted copy control.
       if (target?.closest("[data-allow-copy]")) return;
       event.preventDefault();
     };
