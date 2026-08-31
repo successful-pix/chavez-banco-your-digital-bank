@@ -7,6 +7,22 @@ const oldBlock = `  beforeLoad: async () => {\n    try {\n      const res = awai
 const newBlock = `  beforeLoad: async () => {\n    const res = await meIsAdmin().catch(() => ({ isAdmin: false }));\n    if (res.isAdmin) return;\n    const { data: { user } } = await supabase.auth.getUser();\n    if (!user) throw redirect({ to: "/dashboard" });\n    const { data: role } = await supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();\n    if (!role) throw redirect({ to: "/dashboard" });\n  },`;
 if (source.includes(oldBlock)) source = source.replace(oldBlock, newBlock);
 
+// Support uses these at runtime. Inject them into the existing full Admin
+// dashboard instead of replacing/rebuilding the dashboard file.
+if (!source.includes('from "@/integrations/supabase/client"')) {
+  source = source.replace(
+    'import { useToast } from "@/components/toast";\n',
+    'import { useToast } from "@/components/toast";\nimport { supabase } from "@/integrations/supabase/client";\nimport { ReceiptAttachment } from "@/components/receipt-viewer";\nimport { playNotificationSound } from "@/lib/notify-sound";\n',
+  );
+}
+
+if (!source.includes("useRef")) {
+  source = source.replace(
+    'import { useEffect, useMemo, useState } from "react";',
+    'import { useEffect, useMemo, useRef, useState } from "react";',
+  );
+}
+
 if (!source.includes("Copy, Check")) {
   source = source.replace(
     'Search, Shield, FileCheck, MessageSquare, Wallet, Ban, ArrowLeftRight }',
