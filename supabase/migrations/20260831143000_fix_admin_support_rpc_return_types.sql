@@ -1,0 +1,5 @@
+create or replace function public.admin_list_support_json() returns jsonb language plpgsql security definer set search_path = public as $$ begin perform public.admin_assert_role(); return coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at asc) from (select sm.id, sm.user_id, sm.from_admin, sm.subject, sm.body, sm.image_url, sm.status, sm.priority, sm.read_by_admin, sm.read_by_user, sm.created_at from public.support_messages sm) x),'[]'::jsonb); end; $$;
+grant execute on function public.admin_list_support_json() to authenticated;
+
+create or replace function public.admin_list_support_profiles() returns jsonb language plpgsql security definer set search_path = public as $$ begin perform public.admin_assert_role(); return coalesce((select jsonb_object_agg(p.id::text, jsonb_build_object('full_name',p.full_name,'email',p.email)) from public.profiles p where exists (select 1 from public.support_messages sm where sm.user_id=p.id)),'{}'::jsonb); end; $$;
+grant execute on function public.admin_list_support_profiles() to authenticated;
