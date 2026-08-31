@@ -7,16 +7,18 @@ const oldBlock = `  beforeLoad: async () => {\n    try {\n      const res = awai
 const newBlock = `  beforeLoad: async () => {\n    const res = await meIsAdmin().catch(() => ({ isAdmin: false }));\n    if (res.isAdmin) return;\n    const { data: { user } } = await supabase.auth.getUser();\n    if (!user) throw redirect({ to: "/dashboard" });\n    const { data: role } = await supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();\n    if (!role) throw redirect({ to: "/dashboard" });\n  },`;
 if (source.includes(oldBlock)) source = source.replace(oldBlock, newBlock);
 
-// Support uses these at runtime. Inject them into the existing full Admin
-// dashboard instead of replacing/rebuilding the dashboard file.
-if (!source.includes('from "@/integrations/supabase/client"')) {
+// Support runtime dependencies. Add them to the existing full Admin dashboard;
+// never replace the dashboard implementation.
+if (!source.includes('import { supabase } from "@/integrations/supabase/client"')) {
   source = source.replace(
     'import { useToast } from "@/components/toast";\n',
     'import { useToast } from "@/components/toast";\nimport { supabase } from "@/integrations/supabase/client";\nimport { ReceiptAttachment } from "@/components/receipt-viewer";\nimport { playNotificationSound } from "@/lib/notify-sound";\n',
   );
 }
 
-if (!source.includes("useRef")) {
+// Important: checking for the word "useRef" is insufficient because the
+// component may already use useRef while the React import is still missing.
+if (!source.includes('useRef, useState') && !source.includes('useState, useRef')) {
   source = source.replace(
     'import { useEffect, useMemo, useState } from "react";',
     'import { useEffect, useMemo, useRef, useState } from "react";',
@@ -40,16 +42,16 @@ if (!source.includes("[copied, setCopied]")) {
 if (!source.includes("async function copyMessage")) {
   source = source.replace(
     '  const conv = selected ? rows.filter((r) => r.user_id === selected).sort((a, b) => a.created_at.localeCompare(b.created_at)) : [];',
-    '  async function copyMessage(id: string, body: string) {\n    try {\n      await navigator.clipboard.writeText(body);\n      setCopied(id);\n      setTimeout(() => setCopied(null), 1500);\n    } catch {\n      toast.push("error", "Não foi possível copiar a mensagem");\n    }\n  }\n\n  const conv = selected ? rows.filter((r) => r.user_id === selected).sort((a, b) => a.created_at.localeCompare(b.created_at)) : [];',
+    '  async function copyMessage(id: string, body: string) {\n    try {\n      if (navigator.clipboard?.writeText && window.isSecureContext) await navigator.clipboard.writeText(body);\n      else {\n        const area = document.createElement("textarea");\n        area.value = body; area.setAttribute("readonly", "true"); area.style.position = "fixed"; area.style.left = "-9999px";\n        document.body.appendChild(area); area.focus(); area.select();\n        if (!document.execCommand("copy")) throw new Error("Clipboard unavailable");\n        document.body.removeChild(area);\n      }\n      setCopied(id);\n      setTimeout(() => setCopied((current) => current === id ? null : current), 1500);\n    } catch { toast.push("error", "Não foi possível copiar a mensagem"); }\n  }\n\n  const conv = selected ? rows.filter((r) => r.user_id === selected).sort((a, b) => a.created_at.localeCompare(b.created_at)) : [];',
   );
 }
 
 if (!source.includes('aria-label={copied === m.id ? "Copiado" : "Copiar mensagem"}')) {
   source = source.replace(
     '                    <div className="whitespace-pre-wrap">{m.body}</div>',
-    '                    <div className="flex items-start gap-2"><div className="whitespace-pre-wrap flex-1">{m.body}</div><button type="button" onClick={() => copyMessage(m.id, String(m.body ?? ""))} title={copied === m.id ? "Copiado" : "Copiar"} aria-label={copied === m.id ? "Copiado" : "Copiar mensagem"} className="shrink-0 rounded-lg p-1.5 hover:bg-black/10">{copied === m.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}</button></div>',
+    '                    <div className="flex items-start gap-2"><div className="whitespace-pre-wrap flex-1">{m.body}</div><button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); void copyMessage(m.id, String(m.body ?? "")); }} title={copied === m.id ? "Copiado" : "Copiar"} aria-label={copied === m.id ? "Copiado" : "Copiar mensagem"} className="shrink-0 rounded-lg p-1.5 hover:bg-black/10">{copied === m.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}</button></div>',
   );
 }
 
 writeFileSync(path, source);
-console.log("Admin route build fixes applied; full dashboard preserved and support copy enabled.");
+console.log("Admin route fixes applied; full dashboard preserved and Support dependencies repaired.");
