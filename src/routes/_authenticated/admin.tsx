@@ -479,206 +479,170 @@ function SupportTab() {
   const [selected, setSelected] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [unreadBy, setUnreadBy] = useState<Record<string, number>>({});
   const alerted = useRef<Set<string>>(new Set());
   const primed = useRef(false);
 
   async function refresh() {
-    const [d, n] = await Promise.all([listSupport(), listProfiles()]);
-    const list = d as any[];
-    setRows(list);
-    setNames(n as any);
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [supportResult, profilesResult] = await Promise.all([listSupport(), listProfiles()]);
+      const messages = Array.isArray(supportResult) ? supportResult : [];
+      const profileMap = profilesResult && typeof profilesResult === "object" ? profilesResult as Record<string, { full_name: string | null; email: string | null }> : {};
 
-    const incoming = list.filter((m) => !m.from_admin);
-    if (!primed.current) {
-      incoming.forEach((m) => alerted.current.add(m.id));
-      primed.current = true;
-    } else {
-      const fresh = incoming.filter((m) => !alerted.current.has(m.id));
-      if (fresh.length > 0) {
-        fresh.forEach((m) => alerted.current.add(m.id));
-        setUnreadBy((prev) => {
-          const next = { ...prev };
-          for (const m of fresh) next[m.user_id] = (next[m.user_id] ?? 0) + 1;
-          return next;
-        });
-        playNotificationSound();
-        const who = (n as any)?.[fresh[0].user_id]?.full_name ?? "cliente";
-        toast.push("info", `Nova mensagem de suporte de ${who}`);
+      // Never filter by ticket status/priority/from_admin: every stored message
+      // belongs to a conversation and must be visible to an admin.
+      const normalized = messages
+        .filter((m: any) => m && m.user_id && m.id)
+        .map((m: any) => ({
+          ...m,
+          user_id: String(m.user_id),
+          body: m.body == null ? "" : String(m.body),
+          created_at: m.created_at || new Date(0).toISOString(),
+          from_admin: Boolean(m.from_admin),
+        }));
+
+      setRows(normalized);
+      setNames(profileMap);
+      if (!selected && normalized.length) {
+        setSelected(normalized[0].user_id);
+      } else if (selected && !normalized.some((m: any) => m.user_id === selected)) {
+        setSelected(normalized.length ? normalized[0].user_id : null);
       }
+
+      const incoming = normalized.filter((m: any) => !m.from_admin);
+      if (!primed.current) {
+        incoming.forEach((m: any) => alerted.current.add(m.id));
+        primed.current = true;
+      } else {
+        const fresh = incoming.filter((m: any) => !alerted.current.has(m.id));
+        if (fresh.length) {
+          fresh.forEach((m: any) => alerted.current.add(m.id));
+          setUnreadBy((prev) => {
+            const next = { ...prev };
+            for (const m of fresh) next[m.user_id] = (next[m.user_id] ?? 0) + 1;
+            return next;
+          });
+          playNotificationSound();
+        }
+      }
+    } catch (e: any) {
+      console.error('[admin-support] load failed', e);
+      setLoadError(e?.message || 'Não foi possível carregar o suporte.');
+      setRows([]);
+    } finally {
+      setLoading(false);
     }
   }
-  useEffect(() => { refresh().catch(() => {}); }, []);
 
-  // Realtime: single subscription for the admin inbox.
+  useEffect(() => { void refresh(); }, []);
+
   useEffect(() => {
     const ch = supabase
-      .channel("admin-support-inbox")
-      .on("postgres_changes", { event: "*", schema: "public", table: "support_messages" }, () => {
-        refresh().catch(() => {});
-      })
+      .channel('admin-support-inbox')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_messages' }, () => { void refresh(); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, []);
 
-
   const grouped = useMemo(() => {
-    const m = new Map<string, any[]>();
-    for (const r of rows) {
-      if (!m.has(r.user_id)) m.set(r.user_id, []);
-      m.get(r.user_id)!.push(r);
+    const map = new Map<string, any[]>();
+    for (const message of rows) {
+      const uid = String(message.user_id);
+      const bucket = map.get(uid) ?? [];
+      bucket.push(message);
+      map.set(uid, bucket);
     }
     const term = q.trim().toLowerCase();
-    const list = Array.from(m.entries());
-    if (!term) return list;
-    return list.filter(([uid, msgs]) => {
-      const n = names[uid];
-      return (
-        uid.toLowerCase().includes(term) ||
-        (n?.full_name ?? "").toLowerCase().includes(term) ||
-        (n?.email ?? "").toLowerCase().includes(term) ||
-        msgs.some((mm: any) => (mm.body ?? "").toLowerCase().includes(term))
-      );
-    });
+    return Array.from(map.entries())
+      .map(([uid, messages]) => [uid, messages.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))] as const)
+      .filter(([uid, messages]) => {
+        if (!term) return true;
+        const profile = names[uid];
+        return uid.toLowerCase().includes(term)
+          || (profile?.full_name ?? '').toLowerCase().includes(term)
+          || (profile?.email ?? '').toLowerCase().includes(term)
+          || messages.some((m) => String(m.body ?? '').toLowerCase().includes(term));
+      });
   }, [rows, q, names]);
-
 
   async function send() {
     if (!selected || !text.trim()) return;
     try {
       await reply({ data: { userId: selected, body: text.trim() } });
       setText("");
-      toast.push("success", "Enviado");
-      refresh();
-    } catch (e: any) {
-      toast.push("error", e.message);
-    }
+      toast.push('success', 'Enviado');
+      await refresh();
+    } catch (e: any) { toast.push('error', e?.message || 'Falha ao enviar'); }
   }
 
-  async function setStatus(status: "open" | "pending" | "closed") {
+  async function setStatus(status: 'open' | 'pending' | 'closed') {
     if (!selected) return;
-    try {
-      await setTicketStatus({ data: { userId: selected, status } });
-      toast.push("success", `Ticket ${status}`);
-      refresh();
-    } catch (e: any) { toast.push("error", e.message); }
+    try { await setTicketStatus({ data: { userId: selected, status } }); await refresh(); }
+    catch (e: any) { toast.push('error', e?.message || 'Falha ao atualizar status'); }
   }
 
-  async function setPriority(priority: "low" | "normal" | "high" | "urgent") {
+  async function setPriority(priority: 'low' | 'normal' | 'high' | 'urgent') {
     if (!selected) return;
-    try {
-      await setTicketStatus({ data: { userId: selected, priority } });
-      toast.push("success", `Prioridade: ${priority}`);
-      refresh();
-    } catch (e: any) { toast.push("error", e.message); }
+    try { await setTicketStatus({ data: { userId: selected, priority } }); await refresh(); }
+    catch (e: any) { toast.push('error', e?.message || 'Falha ao atualizar prioridade'); }
   }
 
-  const conv = selected ? rows.filter((r) => r.user_id === selected).sort((a, b) => a.created_at.localeCompare(b.created_at)) : [];
+  const conv = selected ? rows.filter((r: any) => String(r.user_id) === selected).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))) : [];
   const currentTicket = conv[conv.length - 1];
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <div className="rounded-2xl border bg-card shadow-card max-h-[70vh] overflow-y-auto">
         <div className="p-3 border-b sticky top-0 bg-card">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar tickets..."
-            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-          />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar tickets..." className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
         </div>
+        {loading && <p className="p-5 text-sm text-muted-foreground">Carregando conversas...</p>}
+        {loadError && !loading && <div className="m-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{loadError}<button onClick={() => void refresh()} className="ml-2 underline font-semibold">Tentar novamente</button></div>}
         <div className="divide-y">
-          {grouped.length === 0 && <p className="p-5 text-sm text-muted-foreground">Nenhuma conversa.</p>}
+          {!loading && !loadError && grouped.length === 0 && <p className="p-5 text-sm text-muted-foreground">Nenhuma conversa encontrada.</p>}
           {grouped.map(([uid, list]) => {
             const latest = list[0];
+            const profile = names[uid];
             return (
-              <button
-                key={uid}
-                onClick={() => {
-                  setSelected(uid);
-                  setUnreadBy((prev) => { const n2 = { ...prev }; delete n2[uid]; return n2; });
-                }}
-                className={`w-full text-left p-3 hover:bg-accent transition ${selected === uid ? "bg-accent" : ""}`}
-              >
+              <button key={uid} onClick={() => { setSelected(uid); setUnreadBy((prev) => { const next = { ...prev }; delete next[uid]; return next; }); }} className={`w-full text-left p-3 hover:bg-accent transition ${selected === uid ? 'bg-accent' : ''}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold truncate">{names[uid]?.full_name ?? "—"}</div>
-                    <div className="text-[10px] font-mono text-muted-foreground truncate">{names[uid]?.email ?? uid.slice(0, 12)}</div>
+                    <div className="text-sm font-semibold truncate">{profile?.full_name || 'Usuário'}</div>
+                    <div className="text-[10px] font-mono text-muted-foreground truncate">{profile?.email || uid}</div>
                   </div>
-
                   <div className="flex gap-1">
-                    {(unreadBy[uid] ?? 0) > 0 && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary text-primary-foreground">{unreadBy[uid]}</span>
-                    )}
-                    {latest.priority && latest.priority !== "normal" && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                        latest.priority === "urgent" ? "bg-destructive text-destructive-foreground" :
-                        latest.priority === "high" ? "bg-gradient-gold text-primary-foreground" :
-                        "bg-accent"
-                      }`}>{latest.priority}</span>
-                    )}
-                    {latest.status && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                        latest.status === "closed" ? "bg-muted text-muted-foreground" :
-                        latest.status === "pending" ? "bg-primary/10 text-primary" :
-                        "bg-success/15 text-success"
-                      }`}>{latest.status}</span>
-                    )}
+                    {(unreadBy[uid] ?? 0) > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary text-primary-foreground">{unreadBy[uid]}</span>}
+                    {latest.status && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-accent">{latest.status}</span>}
                   </div>
                 </div>
-                <div className="text-sm truncate mt-1">{latest.body}</div>
+                <div className="text-sm truncate mt-1">{latest.body || 'Mensagem sem texto'}</div>
               </button>
             );
           })}
         </div>
       </div>
-      <div className="lg:col-span-2 rounded-2xl border bg-card shadow-card p-4 flex flex-col">
-        {!selected ? (
-          <p className="text-sm text-muted-foreground m-auto">Selecione uma conversa.</p>
-        ) : (
-          <>
-            <div className="pb-3 border-b mb-3">
-              <div className="text-base font-bold">{names[selected!]?.full_name ?? "Usuário"}</div>
-              <div className="text-xs text-muted-foreground">{names[selected!]?.email ?? selected}</div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 pb-3 border-b mb-3">
-              <span className="text-xs font-semibold text-muted-foreground">Status:</span>
 
-              {(["open", "pending", "closed"] as const).map((s) => (
-                <button key={s} onClick={() => setStatus(s)} className={`text-xs font-semibold px-2 py-1 rounded-lg border ${currentTicket?.status === s ? "bg-gradient-primary text-primary-foreground border-transparent" : "hover:bg-accent"}`}>{s}</button>
-              ))}
-              <span className="text-xs font-semibold text-muted-foreground ml-2">Prioridade:</span>
-              {(["low", "normal", "high", "urgent"] as const).map((p) => (
-                <button key={p} onClick={() => setPriority(p)} className={`text-xs font-semibold px-2 py-1 rounded-lg border ${currentTicket?.priority === p ? "bg-gradient-gold text-primary-foreground border-transparent" : "hover:bg-accent"}`}>{p}</button>
-              ))}
-            </div>
-            <div className="flex-1 overflow-y-auto space-y-2 max-h-[50vh]">
-              {conv.map((m) => (
-                <div key={m.id} className={`flex ${m.from_admin ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                  <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${m.from_admin ? "bg-gradient-primary text-primary-foreground" : "bg-accent"}`}>
-                    {m.image_url && <ReceiptAttachment imageRef={m.image_url} />}
-                    <div className="whitespace-pre-wrap">{m.body}</div>
-                    <div className={`text-[10px] mt-1 ${m.from_admin ? "text-white/70" : "text-muted-foreground"}`}>
-                      {new Date(m.created_at).toLocaleString("pt-BR")}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 flex gap-2">
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                rows={2}
-                placeholder="Responder..."
-                className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary resize-none"
-              />
-              <button onClick={send} className="rounded-xl bg-gradient-primary px-4 text-primary-foreground font-semibold">
-                Enviar
-              </button>
-            </div>
-          </>
-        )}
+      <div className="lg:col-span-2 rounded-2xl border bg-card shadow-card p-4 flex flex-col min-h-[500px]">
+        {!selected ? <p className="text-sm text-muted-foreground m-auto">Selecione uma conversa.</p> : <>
+          <div className="pb-3 border-b mb-3">
+            <div className="text-base font-bold">{names[selected]?.full_name || 'Usuário'}</div>
+            <div className="text-xs text-muted-foreground">{names[selected]?.email || selected}</div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pb-3 border-b mb-3">
+            <span className="text-xs font-semibold text-muted-foreground">Status:</span>
+            {(['open', 'pending', 'closed'] as const).map((s) => <button key={s} onClick={() => void setStatus(s)} className={`text-xs font-semibold px-2 py-1 rounded-lg border ${currentTicket?.status === s ? 'bg-gradient-primary text-primary-foreground border-transparent' : 'hover:bg-accent'}`}>{s}</button>)}
+            <span className="text-xs font-semibold text-muted-foreground ml-2">Prioridade:</span>
+            {(['low', 'normal', 'high', 'urgent'] as const).map((p) => <button key={p} onClick={() => void setPriority(p)} className={`text-xs font-semibold px-2 py-1 rounded-lg border ${currentTicket?.priority === p ? 'bg-gradient-gold text-primary-foreground border-transparent' : 'hover:bg-accent'}`}>{p}</button>)}
+          </div>
+          <div className="flex-1 overflow-y-auto space-y-2 max-h-[50vh]">
+            {conv.map((m: any) => <div key={m.id} className={`flex ${m.from_admin ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${m.from_admin ? 'bg-gradient-primary text-primary-foreground' : 'bg-accent'}`}>{m.image_url && <ReceiptAttachment imageRef={m.image_url} />}<div className="whitespace-pre-wrap">{m.body}</div><div className={`text-[10px] mt-1 ${m.from_admin ? 'text-white/70' : 'text-muted-foreground'}`}>{new Date(m.created_at).toLocaleString('pt-BR')}</div></div></div>)}
+          </div>
+          <div className="mt-3 flex gap-2"><textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="Responder..." className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary resize-none" /><button onClick={() => void send()} className="rounded-xl bg-gradient-primary px-4 text-primary-foreground font-semibold">Enviar</button></div>
+        </>}
       </div>
     </div>
   );
