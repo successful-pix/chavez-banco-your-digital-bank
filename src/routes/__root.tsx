@@ -52,7 +52,7 @@ function RootComponent() {
     };
     const preventCopy = (event: ClipboardEvent) => {
       const target = getTarget(event);
-      if (target?.closest("[data-allow-copy]")) return;
+      if (target?.closest("[data-allow-copy]") || target?.matches("textarea")) return;
       event.preventDefault();
     };
     const preventCut = (event: ClipboardEvent) => {
