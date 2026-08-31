@@ -60,10 +60,24 @@ function RootComponent() {
       if (target?.closest("input, textarea, [contenteditable=\"true\"]")) return;
       event.preventDefault();
     };
+    const preventGestureZoom = (event: Event) => { event.preventDefault(); };
+    const preventMultiTouchZoom = (event: TouchEvent) => { if (event.touches.length > 1) event.preventDefault(); };
     document.addEventListener("contextmenu", preventContextMenu);
     document.addEventListener("copy", preventCopy);
     document.addEventListener("cut", preventCut);
-    return () => { document.removeEventListener("contextmenu", preventContextMenu); document.removeEventListener("copy", preventCopy); document.removeEventListener("cut", preventCut); };
+    document.addEventListener("gesturestart", preventGestureZoom, { passive: false });
+    document.addEventListener("gesturechange", preventGestureZoom, { passive: false });
+    document.addEventListener("gestureend", preventGestureZoom, { passive: false });
+    document.addEventListener("touchmove", preventMultiTouchZoom, { passive: false });
+    return () => {
+      document.removeEventListener("contextmenu", preventContextMenu);
+      document.removeEventListener("copy", preventCopy);
+      document.removeEventListener("cut", preventCut);
+      document.removeEventListener("gesturestart", preventGestureZoom);
+      document.removeEventListener("gesturechange", preventGestureZoom);
+      document.removeEventListener("gestureend", preventGestureZoom);
+      document.removeEventListener("touchmove", preventMultiTouchZoom);
+    };
   }, []);
   return <QueryClientProvider client={queryClient}><ThemeProvider><I18nProvider><ToastProvider><SplashScreen /><Outlet /><InstallPrompt /></ToastProvider></I18nProvider></ThemeProvider></QueryClientProvider>;
 }
