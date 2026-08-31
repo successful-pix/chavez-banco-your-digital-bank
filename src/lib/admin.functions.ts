@@ -20,8 +20,6 @@ export const adminRevokeRole = createServerFn({ method: "POST" }).middleware([re
 export const adminListRoles = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => { await assertAdmin(context.supabase, context.userId); const { data, error } = await context.supabase.rpc("admin_list_roles"); if (error) throw error; return data ?? []; });
 export const adminSetTicketStatus = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ userId: z.string().uuid(), status: z.enum(["open", "pending", "closed"]).optional(), priority: z.enum(["low", "normal", "high", "urgent"]).optional() }).parse(d)).handler(async ({ context, data }) => { await assertAdmin(context.supabase, context.userId); const patch: Record<string, string> = {}; if (data.status) patch.status = data.status; if (data.priority) patch.priority = data.priority; if (!Object.keys(patch).length) return { ok: true }; const { error } = await context.supabase.from("support_messages").update(patch).eq("user_id", data.userId); if (error) throw error; return { ok: true }; });
 
-// Support loaders deliberately normalize Supabase JSONB values so the Admin UI never
-// crashes when a JSON RPC returns null, an object, or an array.
 export const adminListSupport = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   await assertAdmin(context.supabase, context.userId);
   const { data, error } = await context.supabase.rpc("admin_list_support_json");
@@ -37,12 +35,25 @@ export const adminSetBlocked = createServerFn({ method: "POST" }).middleware([re
 export const adminListPendingTransfers = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => { await assertAdmin(context.supabase, context.userId); const { data, error } = await context.supabase.rpc("admin_list_pending_transfers"); if (error) throw error; return data ?? []; });
 export const adminApproveTransfer = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ transactionId: z.string().uuid() }).parse(d)).handler(async ({ context, data }) => { await assertAdmin(context.supabase, context.userId); const { error } = await context.supabase.from("transactions").update({ status: "completed", approved_by: context.userId, approved_at: new Date().toISOString() }).eq("id", data.transactionId); if (error) throw error; return { ok: true }; });
 export const adminRejectTransfer = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ transactionId: z.string().uuid(), reason: z.string().max(300).optional() }).parse(d)).handler(async ({ context, data }) => { await assertAdmin(context.supabase, context.userId); const { error } = await context.supabase.from("transactions").update({ status: "rejected", approved_by: context.userId, approved_at: new Date().toISOString(), rejection_reason: data.reason ?? null }).eq("id", data.transactionId); if (error) throw error; return { ok: true }; });
+
 export const adminListSupportProfiles = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   await assertAdmin(context.supabase, context.userId);
   const { data, error } = await context.supabase.rpc("admin_list_support_profiles");
   if (error) throw error;
-  const rows = Array.isArray(data) ? data : (typeof data === "string" ? (() => { try { const p = JSON.parse(data); return Array.isArray(p) ? p : []; } catch { return []; } })() : []);
+  let value: any = data;
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { value = {}; }
+  }
   const map: Record<string, { full_name: string | null; email: string | null }> = {};
-  for (const p of rows) if (p?.id) map[String(p.id)] = { full_name: p.full_name ?? null, email: p.email ?? null };
+  if (Array.isArray(value)) {
+    for (const p of value) if (p?.id) map[String(p.id)] = { full_name: p.full_name ?? null, email: p.email ?? null };
+  } else if (value && typeof value === "object") {
+    for (const [id, p] of Object.entries(value)) {
+      if (p && typeof p === "object") {
+        const row = p as any;
+        map[id] = { full_name: row.full_name ?? null, email: row.email ?? null };
+      }
+    }
+  }
   return map;
 });
