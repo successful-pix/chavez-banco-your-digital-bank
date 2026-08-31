@@ -2,16 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-// Best-effort in-process guard against duplicate sends (re-renders / reconnects).
-// The authoritative dedupe is the message id: a message already flagged
-// read_by_admin=false + notified marker in this set is never re-sent.
 const notified = new Set<string>();
 
-/**
- * Customer -> support team email notification for a freshly inserted support message.
- * Verifies (via RLS-scoped client) that the message belongs to the caller,
- * so nobody can trigger notifications for another customer's conversation.
- */
 export const notifySupportTeam = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ messageId: z.string().uuid() }).parse(d))
@@ -27,7 +19,6 @@ export const notifySupportTeam = createServerFn({ method: "POST" })
     if (!msg || msg.user_id !== context.userId || msg.from_admin) {
       return { skipped: "not-eligible" as const };
     }
-    notified.add(data.messageId);
 
     const { data: p } = await context.supabase
       .from("profiles")
@@ -35,19 +26,30 @@ export const notifySupportTeam = createServerFn({ method: "POST" })
       .eq("id", context.userId)
       .maybeSingle();
 
-    const inbox = process.env["SUPPORT_NOTIFY_EMAIL"] || "support@chavezbanco.online";
+    const { data: adminEmails, error: adminEmailError } = await context.supabase.rpc("get_support_admin_emails");
+    if (adminEmailError) {
+      console.error("[email] admin recipient lookup", adminEmailError);
+      return { ok: false as const };
+    }
+
+    const recipients = Array.from(new Set((Array.isArray(adminEmails) ? adminEmails : []).filter((email): email is string => typeof email === "string" && email.trim().length > 0).map((email) => email.trim().toLowerCase())));
+    if (recipients.length === 0) return { skipped: "no-admin-recipients" as const };
+
+    notified.add(data.messageId);
     const { emails } = await import("@/lib/email.server");
     const when = new Date(msg.created_at as string).toLocaleString("pt-BR");
 
     try {
-      await emails.supportNewMessageToTeam(
-        inbox,
-        p?.full_name ?? "",
-        p?.email ?? "",
-        String(msg.body ?? ""),
-        when,
-        context.userId,
-      );
+      await Promise.all(recipients.map((inbox) =>
+        emails.supportNewMessageToTeam(
+          inbox,
+          p?.full_name ?? "",
+          p?.email ?? "",
+          String(msg.body ?? ""),
+          when,
+          context.userId,
+        )
+      ));
     } catch (e) {
       notified.delete(data.messageId);
       console.error("[email] support team notify", e);
