@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, X } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
@@ -51,6 +52,11 @@ function TransferPage() {
     description: "",
   });
   const [saving, setSaving] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerStreamRef = useRef<MediaStream | null>(null);
+  const scannerTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -186,7 +192,23 @@ function TransferPage() {
       <form onSubmit={submit} className="rounded-2xl border bg-card shadow-card p-5 space-y-3">
         <Field label={t("transfer.recipient.name")} required value={form.recipient_name} onChange={(v) => up("recipient_name", v)} />
         {type === "pix" ? (
-          <Field label={t("transfer.pixkey")} required value={form.pix_key} onChange={(v) => up("pix_key", v)} />
+          <div className="space-y-2">
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Field label={t("transfer.pixkey")} required value={form.pix_key} onChange={(v) => up("pix_key", v)} />
+              </div>
+              <button
+                type="button"
+                onClick={() => setScannerOpen(true)}
+                className="rounded-xl border bg-background px-3 py-2.5 text-sm font-semibold hover:border-primary/40 transition"
+                aria-label="Scan QR code"
+                title="Scan QR code"
+              >
+                <Camera className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">Scan a QR code to automatically fill the PIX payment details.</p>
+          </div>
         ) : (
           <>
             <Field label={t("transfer.bank")} required value={form.bank} onChange={(v) => up("bank", v)} />
@@ -206,6 +228,27 @@ function TransferPage() {
           {saving ? t("transfer.saving") : t("transfer.submit")}
         </button>
       </form>
+
+      {scannerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-card p-4 shadow-elevated">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-foreground">Scan QR payment</h2>
+                <p className="text-xs text-muted-foreground">Point your camera at the payment QR code.</p>
+              </div>
+              <button type="button" onClick={() => setScannerOpen(false)} className="rounded-lg p-2 hover:bg-accent" aria-label="Close scanner">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {scannerError ? (
+              <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{scannerError}</div>
+            ) : (
+              <video ref={videoRef} muted playsInline className="aspect-square w-full rounded-xl bg-black object-cover" />
+            )}
+          </div>
+        </div>
+      )}
 
       <PinModal
         open={pinOpen}
