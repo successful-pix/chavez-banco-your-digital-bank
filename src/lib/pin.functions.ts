@@ -37,20 +37,21 @@ function timingSafeEqual(a: string, b: string) {
   return d === 0;
 }
 
-async function loadPinRow(userId: string) {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data } = await supabaseAdmin
+async function loadPinRow(supabase: any, userId: string) {
+  const { data, error } = await supabase
     .from("profiles")
     .select("pin_hash, pin_salt, pin_attempts, pin_locked_until, email_verified, kyc_status")
     .eq("id", userId)
     .maybeSingle();
-  return { admin: supabaseAdmin, row: data as any };
+
+  if (error) throw error;
+  return { client: supabase, row: data as any };
 }
 
 export const getPinStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { row } = await loadPinRow(context.userId);
+    const { row } = await loadPinRow(context.supabase, context.userId);
     const lockedMs = row?.pin_locked_until ? new Date(row.pin_locked_until).getTime() - Date.now() : 0;
     return {
       hasPin: !!row?.pin_hash,
@@ -62,13 +63,13 @@ export const setTransferPin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ pin: z.string().regex(PIN_REGEX) }).parse(d))
   .handler(async ({ context, data }) => {
-    const { admin, row } = await loadPinRow(context.userId);
+    const { client, row } = await loadPinRow(context.supabase, context.userId);
     if (row?.pin_hash) return { ok: false, error: "already_set" };
     const salt = new Uint8Array(16);
     crypto.getRandomValues(salt);
     const saltB64 = b64(salt);
     const hash = await derive(data.pin, saltB64);
-    await admin
+    await client
       .from("profiles")
       .update({ pin_hash: hash, pin_salt: saltB64, pin_attempts: 0, pin_locked_until: null })
       .eq("id", context.userId);
@@ -81,7 +82,7 @@ export const changeTransferPin = createServerFn({ method: "POST" })
     z.object({ currentPin: z.string().regex(PIN_REGEX), newPin: z.string().regex(PIN_REGEX) }).parse(d),
   )
   .handler(async ({ context, data }) => {
-    const { admin, row } = await loadPinRow(context.userId);
+    const { client, row } = await loadPinRow(context.supabase, context.userId);
     if (!row?.pin_hash || !row?.pin_salt) return { ok: false, error: "no_pin" };
     if (row.pin_locked_until && new Date(row.pin_locked_until) > new Date()) {
       return { ok: false, error: "locked", lockedUntil: row.pin_locked_until };
@@ -90,7 +91,7 @@ export const changeTransferPin = createServerFn({ method: "POST" })
     if (!timingSafeEqual(attempt, row.pin_hash)) {
       const attempts = (row.pin_attempts ?? 0) + 1;
       const lock = attempts >= MAX_ATTEMPTS ? new Date(Date.now() + LOCK_MINUTES * 60_000).toISOString() : null;
-      await admin
+      await client
         .from("profiles")
         .update({ pin_attempts: lock ? 0 : attempts, pin_locked_until: lock })
         .eq("id", context.userId);
@@ -100,7 +101,7 @@ export const changeTransferPin = createServerFn({ method: "POST" })
     crypto.getRandomValues(salt);
     const saltB64 = b64(salt);
     const hash = await derive(data.newPin, saltB64);
-    await admin
+    await client
       .from("profiles")
       .update({ pin_hash: hash, pin_salt: saltB64, pin_attempts: 0, pin_locked_until: null })
       .eq("id", context.userId);
@@ -113,12 +114,12 @@ export const resetTransferPin = createServerFn({ method: "POST" })
     z.object({ newPin: z.string().regex(PIN_REGEX), otp: z.string().min(4).max(10) }).parse(d),
   )
   .handler(async ({ context, data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: prof } = await supabaseAdmin
+    const { data: prof, error } = await context.supabase
       .from("profiles")
       .select("verification_code, verification_expires_at")
       .eq("id", context.userId)
       .maybeSingle();
+    if (error) throw error;
     if (!prof) return { ok: false, error: "not_found" };
     if (!prof.verification_code || prof.verification_code !== data.otp.trim()) {
       return { ok: false, error: "invalid_otp" };
@@ -130,7 +131,7 @@ export const resetTransferPin = createServerFn({ method: "POST" })
     crypto.getRandomValues(salt);
     const saltB64 = b64(salt);
     const hash = await derive(data.newPin, saltB64);
-    await supabaseAdmin
+    await context.supabase
       .from("profiles")
       .update({
         pin_hash: hash,
@@ -148,7 +149,7 @@ export const verifyTransferPin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ pin: z.string().regex(PIN_REGEX) }).parse(d))
   .handler(async ({ context, data }) => {
-    const { admin, row } = await loadPinRow(context.userId);
+    const { client, row } = await loadPinRow(context.supabase, context.userId);
     if (!row?.pin_hash || !row?.pin_salt) return { ok: false, error: "no_pin" };
     if (row.pin_locked_until && new Date(row.pin_locked_until) > new Date()) {
       return { ok: false, error: "locked", lockedUntil: row.pin_locked_until };
@@ -157,14 +158,14 @@ export const verifyTransferPin = createServerFn({ method: "POST" })
     if (!timingSafeEqual(attempt, row.pin_hash)) {
       const attempts = (row.pin_attempts ?? 0) + 1;
       const lock = attempts >= MAX_ATTEMPTS ? new Date(Date.now() + LOCK_MINUTES * 60_000).toISOString() : null;
-      await admin
+      await client
         .from("profiles")
         .update({ pin_attempts: lock ? 0 : attempts, pin_locked_until: lock })
         .eq("id", context.userId);
       return { ok: false, error: lock ? "locked" : "invalid", attemptsLeft: Math.max(0, MAX_ATTEMPTS - attempts), lockedUntil: lock };
     }
     if ((row.pin_attempts ?? 0) > 0) {
-      await admin.from("profiles").update({ pin_attempts: 0 }).eq("id", context.userId);
+      await client.from("profiles").update({ pin_attempts: 0 }).eq("id", context.userId);
     }
     return { ok: true };
   });
