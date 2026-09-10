@@ -77,6 +77,114 @@ function TransferPage() {
     })();
   }, []);
 
+  function stopScanner() {
+    if (scannerTimerRef.current !== null) {
+      window.clearInterval(scannerTimerRef.current);
+      scannerTimerRef.current = null;
+    }
+    scannerStreamRef.current?.getTracks().forEach((track) => track.stop());
+    scannerStreamRef.current = null;
+  }
+
+  function extractPixData(raw: string) {
+    let pixKey = raw.trim();
+    let merchantName = "";
+    let amount = "";
+
+    const readTlv = (value: string) => {
+      const tags: Record<string, string> = {};
+      for (let i = 0; i + 4 <= value.length;) {
+        const tag = value.slice(i, i + 2);
+        const length = Number(value.slice(i + 2, i + 4));
+        if (!Number.isFinite(length) || i + 4 + length > value.length) break;
+        tags[tag] = value.slice(i + 4, i + 4 + length);
+        i += 4 + length;
+      }
+      return tags;
+    };
+
+    if (/^000201/.test(raw)) {
+      const tags = readTlv(raw);
+      merchantName = tags["59"] || "";
+      amount = tags["54"] || "";
+      for (const tag of Object.keys(tags)) {
+        if (tag >= "26" && tag <= "51") {
+          const nested = readTlv(tags[tag]);
+          if (nested["00"] === "br.gov.bcb.pix" && nested["01"]) {
+            pixKey = nested["01"];
+            break;
+          }
+        }
+      }
+    }
+
+    return { pixKey, merchantName, amount };
+  }
+
+  useEffect(() => {
+    if (!scannerOpen) return;
+    let cancelled = false;
+
+    const startScanner = async () => {
+      setScannerError(null);
+      try {
+        const Detector = (window as any).BarcodeDetector;
+        if (!Detector) {
+          setScannerError("QR scanning is not supported by this browser. Please use the latest Chrome on your phone.");
+          return;
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        scannerStreamRef.current = stream;
+        if (!videoRef.current) return;
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+
+        const detector = new Detector({ formats: ["qr_code"] });
+        scannerTimerRef.current = window.setInterval(async () => {
+          if (!videoRef.current || videoRef.current.readyState < 2) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            const rawValue = codes?.[0]?.rawValue;
+            if (!rawValue) return;
+            const data = extractPixData(rawValue);
+            setForm((previous) => ({
+              ...previous,
+              pix_key: data.pixKey || previous.pix_key,
+              recipient_name: data.merchantName || previous.recipient_name,
+              amount: data.amount || previous.amount,
+            }));
+            stopScanner();
+            setScannerOpen(false);
+            toast.push("success", "QR code scanned successfully");
+          } catch {
+            // Continue scanning; temporary frame detection errors are normal.
+          }
+        }, 300);
+      } catch (error: any) {
+        setScannerError(
+          error?.name === "NotAllowedError"
+            ? "Camera permission was denied. Please allow camera access and try again."
+            : "Unable to access the camera. Please check your camera permission."
+        );
+      }
+    };
+
+    startScanner();
+    return () => {
+      cancelled = true;
+      stopScanner();
+    };
+  }, [scannerOpen]);
+
   function up<K extends keyof typeof form>(k: K, v: string) {
     setForm((p) => ({ ...p, [k]: v }));
   }
