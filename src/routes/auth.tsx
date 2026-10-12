@@ -434,15 +434,45 @@ function SignUp() {
         console.warn("avatar upload failed", e);
       }
     }
-// Auto-confirm is enabled server-side, so a session should exist. Send code.
-try {
-  await doSendCode();
-} catch (e) {
-  console.warn("send code failed", e);
-}
+// This app sends its own verification code from an authenticated server function.
+    // Supabase email confirmation must be configured consistently with this custom flow:
+    // without a session, the server function cannot securely identify the new user.
+    if (!signUp.session) {
+      setLoading(false);
+      setStep("form");
+      toast.push(
+        "error",
+        "Signup created the account but no session was returned. This custom verification flow requires Supabase Email Confirmations to be disabled; otherwise use Supabase's built-in confirmation OTP.",
+      );
+      return;
+    }
 
-setLoading(false);
-setStep("code");
+    try {
+      const result = await doSendCode();
+      if (!result?.ok) {
+        setLoading(false);
+        setStep("form");
+        toast.push(
+          "error",
+          result?.error === "email_send_failed"
+            ? "Your account was created, but the verification email could not be sent. Please sign in and resend the code."
+            : "Your account was created, but we could not create a verification code. Please sign in and try again.",
+        );
+        return;
+      }
+    } catch (e) {
+      console.error("send verification code failed", e);
+      setLoading(false);
+      setStep("form");
+      toast.push(
+        "error",
+        "Your account was created, but verification could not start because the session is missing or expired. Please sign in and resend the code.",
+      );
+      return;
+    }
+
+    setLoading(false);
+    setStep("code");
 }
   async function submitCode(e: React.FormEvent) {
     e.preventDefault();
