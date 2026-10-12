@@ -53,20 +53,30 @@ export const sendVerificationCode = createServerFn({ method: "POST" })
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin
+    const { error: saveError } = await supabaseAdmin
       .from("profiles")
       .update({ verification_code: code, verification_expires_at: expires })
       .eq("id", context.userId);
+
+    if (saveError) {
+      console.error("[verification] failed to save code:", saveError.message);
+      return { ok: false, error: "code_save_failed" };
+    }
+
     const { emails } = await import("@/lib/email.server");
+    const emailResult = await emails.verificationCode(
+      p.email,
+      p.full_name ?? "",
+      code
+    );
 
-const emailResult = await emails.verificationCode(
-  p.email,
-  p.full_name ?? "",
-  code
-);
-console.log("VERIFICATION EMAIL RESULT:", emailResult);
+    if (!emailResult || !("ok" in emailResult) || emailResult.ok !== true) {
+      console.error("[verification] email delivery failed:", emailResult);
+      return { ok: false, error: "email_send_failed" };
+    }
 
-return { ok: true, emailResult };
+    console.log("[verification] email accepted by provider");
+    return { ok: true };
   });
   
 export const verifyCode = createServerFn({ method: "POST" })
