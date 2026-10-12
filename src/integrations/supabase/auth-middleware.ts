@@ -3,6 +3,7 @@ import { createMiddleware } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
+import { supabase } from './client'
 
 
 
@@ -30,7 +31,19 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
-export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
+export const requireSupabaseAuth = createMiddleware({ type: 'function' })
+  .client(async ({ next }) => {
+    // TanStack Start server-function RPCs do not automatically forward the
+    // Supabase session stored in localStorage. Attach the current access token.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      return next();
+    }
+    return next({
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+  })
+  .server(
   async ({ next }) => {
     
     const SUPABASE_URL = process.env.SUPABASE_URL;
