@@ -5,6 +5,7 @@ import {
   adminListUsers,
   adminListKyc,
   adminSetKycStatus,
+  adminCreateKycDocumentUrl,
   adminAdjustBalance,
   adminListSupport,
   adminReplySupport,
@@ -21,7 +22,7 @@ import {
 } from "@/lib/admin.functions";
 import { formatBRL } from "@/lib/currency";
 import { useToast } from "@/components/toast";
-import { Search, Shield, FileCheck, MessageSquare, Wallet, Ban, ArrowLeftRight } from "lucide-react";
+import { Search, Shield, FileCheck, MessageSquare, Wallet, Ban, ArrowLeftRight, Eye } from "lucide-react";
 
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -248,26 +249,67 @@ function UsersTab() {
   );
 }
 
-type KycRow = { id: string; user_id: string; doc_type: string; storage_path: string; status: string; notes: string | null; created_at: string };
+type KycRow = {
+  id: string; user_id: string; doc_type: string; storage_path: string;
+  status: string; notes: string | null; created_at: string;
+  full_name?: string | null; cpf?: string | null;
+};
 
 function KycTab() {
   const listKyc = useServerFn(adminListKyc);
+  const listUsers = useServerFn(adminListUsers);
   const setStatus = useServerFn(adminSetKycStatus);
+  const createDocumentUrl = useServerFn(adminCreateKycDocumentUrl);
   const toast = useToast();
   const [rows, setRows] = useState<KycRow[]>([]);
+  const [openingDoc, setOpeningDoc] = useState<string | null>(null);
 
   async function refresh() {
-    const d = await listKyc();
-    setRows(d as unknown as KycRow[]);
+    const [documents, users] = await Promise.all([listKyc(), listUsers()]);
+    const profiles = new Map(
+      (users as unknown as UserRow[]).map((user) => [
+        user.id,
+        { full_name: user.full_name, cpf: user.cpf },
+      ]),
+    );
+    setRows((documents as unknown as KycRow[]).map((doc) => ({
+      ...doc,
+      ...profiles.get(doc.user_id),
+    })));
   }
-  useEffect(() => { refresh().catch(() => {}); }, []);
+  useEffect(() => { refresh().catch((error) => console.error("KYC list failed", error)); }, []);
+
+  async function viewDocument(row: KycRow) {
+    // Open a blank tab immediately to avoid popup blockers while the signed URL is generated.
+    const tab = window.open("about:blank", "_blank");
+    setOpeningDoc(row.id);
+    try {
+      const result = await createDocumentUrl({ data: { docId: row.id } });
+      if (!result?.url) throw new Error("Não foi possível abrir o documento.");
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = result.url;
+      } else {
+        const link = document.createElement("a");
+        link.href = result.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.click();
+      }
+    } catch (e: any) {
+      tab?.close();
+      toast.push("error", e?.message ?? "Falha ao abrir o documento");
+    } finally {
+      setOpeningDoc(null);
+    }
+  }
 
   async function act(row: KycRow, status: "approved" | "rejected") {
     const notes = status === "rejected" ? prompt("Motivo da rejeição?") ?? undefined : undefined;
     try {
       await setStatus({ data: { docId: row.id, userId: row.user_id, status, notes } });
       toast.push("success", "Atualizado");
-      refresh();
+      await refresh();
     } catch (e: any) {
       toast.push("error", e.message);
     }
@@ -278,18 +320,27 @@ function KycTab() {
       {rows.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted-foreground">Nenhum documento pendente.</p>}
       {rows.map((r) => (
         <div key={r.id} className="p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-xs text-muted-foreground">Usuário: <span className="font-mono">{r.user_id.slice(0, 8)}</span></div>
-            <div className="font-semibold">{r.doc_type.toUpperCase()}</div>
-            <div className="text-xs text-muted-foreground">{r.storage_path}</div>
+          <div className="min-w-0 flex-1">
+            <div className="font-bold text-base">{r.full_name || "Nome não informado"}</div>
+            <div className="text-sm text-foreground">CPF: <span className="font-mono">{r.cpf || "Não informado"}</span></div>
+            <div className="mt-1 font-semibold">{r.doc_type.toUpperCase()} • <span className="text-xs font-normal text-muted-foreground">Enviado em {new Date(r.created_at).toLocaleString("pt-BR")}</span></div>
             {r.notes && <div className="text-xs mt-1">Nota: {r.notes}</div>}
+            <div className="mt-1 text-[11px] text-muted-foreground">ID do usuário: <span className="font-mono">{r.user_id.slice(0, 8)}</span></div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className={`text-xs font-semibold px-2 py-1 rounded-lg ${
               r.status === "approved" ? "bg-success/15 text-success" :
               r.status === "rejected" ? "bg-destructive/15 text-destructive" :
               "bg-primary/10 text-primary"
             }`}>{r.status}</span>
+            <button
+              onClick={() => viewDocument(r)}
+              disabled={openingDoc === r.id}
+              className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              {openingDoc === r.id ? "Abrindo..." : "Ver documento"}
+            </button>
             <button onClick={() => act(r, "approved")} className="rounded-xl bg-success text-success-foreground px-3 py-1.5 text-xs font-semibold">Aprovar</button>
             <button onClick={() => act(r, "rejected")} className="rounded-xl bg-destructive text-destructive-foreground px-3 py-1.5 text-xs font-semibold">Rejeitar</button>
           </div>
