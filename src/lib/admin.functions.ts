@@ -10,6 +10,27 @@ async function assertAdmin(supabase: any, userId: string) {
 
 export const adminListUsers = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => { await assertAdmin(context.supabase, context.userId); const { data, error } = await context.supabase.rpc("admin_list_users"); if (error) throw error; return data ?? []; });
 export const adminListKyc = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => { await assertAdmin(context.supabase, context.userId); const { data, error } = await context.supabase.rpc("admin_list_kyc"); if (error) throw error; return data ?? []; });
+export const adminCreateKycDocumentUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ docId: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    await assertAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: doc, error: docError } = await supabaseAdmin
+      .from("kyc_documents")
+      .select("storage_path")
+      .eq("id", data.docId)
+      .maybeSingle();
+    if (docError) throw docError;
+    if (!doc?.storage_path) throw new Error("KYC document not found");
+    const { data: signed, error: signedError } = await supabaseAdmin.storage
+      .from("kyc")
+      .createSignedUrl(doc.storage_path, 300);
+    if (signedError) throw signedError;
+    if (!signed?.signedUrl) throw new Error("Could not create a secure document link");
+    return { url: signed.signedUrl };
+  });
+
 export const adminSetKycStatus = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ docId: z.string().uuid(), userId: z.string().uuid(), status: z.enum(["approved", "rejected", "pending"]), notes: z.string().max(500).optional() }).parse(d)).handler(async ({ context, data }) => { await assertAdmin(context.supabase, context.userId); const { error } = await context.supabase.from("kyc_documents").update({ status: data.status, notes: data.notes ?? null }).eq("id", data.docId); if (error) throw error; if (data.status === "approved" || data.status === "rejected") { const { error: profileError } = await context.supabase.from("profiles").update({ kyc_status: data.status }).eq("id", data.userId); if (profileError) throw profileError; } return { ok: true }; });
 export const adminAdjustBalance = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ userId: z.string().uuid(), amount: z.number().positive(), direction: z.enum(["in", "out"]), type: z.enum(["deposit", "withdrawal", "pix", "ted", "doc", "internal", "international_transfer"]), description: z.string().max(300).optional(), sender_name: z.string().max(150).optional(), sender_account: z.string().max(50).optional(), sender_bank: z.string().max(100).optional(), recipient_name: z.string().max(150).optional(), recipient_account: z.string().max(50).optional(), recipient_bank: z.string().max(100).optional(), recipient_agencia: z.string().max(20).optional(), pix_key: z.string().max(150).optional(), created_at: z.string().optional() }).parse(d)).handler(async ({ context, data }) => { await assertAdmin(context.supabase, context.userId); const { data: profile, error: pe } = await context.supabase.from("profiles").select("balance, full_name, account_number, email").eq("id", data.userId).maybeSingle(); if (pe) throw pe; if (!profile) throw new Error("User not found"); const next = Number(profile.balance) + (data.direction === "in" ? data.amount : -data.amount); if (next < 0) throw new Error("Would result in negative balance"); const { data: tx, error: te } = await context.supabase.from("transactions").insert({ user_id: data.userId, type: data.type, direction: data.direction, amount: data.amount, description: data.description ?? null, sender_name: data.sender_name ?? null, sender_account: data.sender_account ?? null, sender_bank: data.sender_bank ?? null, recipient_name: data.recipient_name ?? profile.full_name, recipient_account: data.recipient_account ?? profile.account_number, recipient_bank: data.recipient_bank ?? null, recipient_agencia: data.recipient_agencia ?? null, pix_key: data.pix_key ?? null, status: "completed", ...(data.created_at ? { created_at: data.created_at } : {}) }).select("id").single(); if (te) throw te; const { error: ue } = await context.supabase.from("profiles").update({ balance: next }).eq("id", data.userId); if (ue) throw ue; return { ok: true, transactionId: tx.id, newBalance: next }; });
 export const adminListTransactions = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => { await assertAdmin(context.supabase, context.userId); const { data, error } = await context.supabase.rpc("admin_list_transactions"); if (error) throw error; return data ?? []; });
