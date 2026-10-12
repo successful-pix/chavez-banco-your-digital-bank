@@ -92,7 +92,13 @@ function SecurityPage() {
 
   async function sendOtp() {
     try {
-      await doSendOtp();
+      const result = await doSendOtp();
+      if (!result?.ok) {
+        toast.push("error", result?.error === "email_send_failed"
+          ? "Não foi possível enviar o código. Tente novamente mais tarde."
+          : "Não foi possível gerar o código. Tente novamente.");
+        return;
+      }
       setOtpSent(true);
       toast.push("success", "Código enviado por e-mail");
     } catch {
