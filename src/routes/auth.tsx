@@ -237,8 +237,18 @@ function SignIn() {
 
   async function resend() {
     setResending(true);
-    try { await doSendCode(); toast.push("success", "Código reenviado"); }
-    catch { toast.push("error", "Falha ao reenviar"); }
+    try {
+      const result = await doSendCode();
+      if (!result?.ok) {
+        toast.push("error", result?.error === "email_send_failed"
+          ? "Não foi possível enviar o código. Tente novamente mais tarde."
+          : "Não foi possível gerar o código. Tente novamente.");
+        return;
+      }
+      toast.push("success", "Código reenviado");
+    } catch {
+      toast.push("error", "Falha ao reenviar o código");
+    }
     finally { setResending(false); }
   }
 
@@ -457,7 +467,13 @@ setStep("code");
   async function resend() {
     setResending(true);
     try {
-      await doSendCode();
+      const result = await doSendCode();
+      if (!result?.ok) {
+        toast.push("error", result?.error === "email_send_failed"
+          ? "Não foi possível enviar o código. Tente novamente mais tarde."
+          : "Não foi possível gerar o código. Tente novamente.");
+        return;
+      }
       toast.push("success", "Código reenviado");
     } catch {
       toast.push("error", "Falha ao reenviar");
