@@ -11,7 +11,6 @@ AS $$
 DECLARE
   v_balance numeric(14,2);
   v_blocked boolean;
-  v_kyc_status text;
 BEGIN
   IF NEW.direction <> 'out' OR NEW.status <> 'pending' THEN
     RETURN NEW;
@@ -21,8 +20,8 @@ BEGIN
     RAISE EXCEPTION 'Transfer amount must be a positive amount with at most two decimal places';
   END IF;
 
-  SELECT balance, COALESCE(blocked, false), COALESCE(kyc_status, 'pending')
-    INTO v_balance, v_blocked, v_kyc_status
+  SELECT balance, COALESCE(blocked, false)
+    INTO v_balance, v_blocked
     FROM public.profiles
    WHERE id = NEW.user_id
    FOR UPDATE;
@@ -32,9 +31,6 @@ BEGIN
   END IF;
   IF v_blocked THEN
     RAISE EXCEPTION 'This account is blocked';
-  END IF;
-  IF v_kyc_status <> 'approved' THEN
-    RAISE EXCEPTION 'KYC approval is required before transferring';
   END IF;
   IF v_balance < NEW.amount THEN
     RAISE EXCEPTION 'Insufficient available balance';
