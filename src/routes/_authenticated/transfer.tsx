@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Camera, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,14 +29,13 @@ export const Route = createFileRoute("/_authenticated/transfer")({
 type TxType = "pix" | "ted" | "doc" | "internal";
 
 function TransferPage() {
-  const { type: initialType } = Route.useSearch();
+  Route.useSearch();
   const { t } = useI18n();
   const nav = useNavigate();
   const toast = useToast();
   const doTransferEmail = useServerFn(notifyTransfer);
   const pinStatus = useServerFn(getPinStatus);
 
-  const [type] = useState<TxType>("internal");
   const [balance, setBalance] = useState(0);
   const [blocked, setBlocked] = useState(false);
   const [kycStatus, setKycStatus] = useState<string>("pending");
