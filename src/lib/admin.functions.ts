@@ -69,8 +69,26 @@ export const adminListSupport = createServerFn({ method: "GET" }).middleware([re
 export const meIsAdmin = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => { try { await assertAdmin(context.supabase, context.userId); return { isAdmin: true }; } catch (error) { console.error("[admin] role check failed", error); return { isAdmin: false }; } });
 export const adminSetBlocked = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ userId: z.string().uuid(), blocked: z.boolean() }).parse(d)).handler(async ({ context, data }) => { await assertAdmin(context.supabase, context.userId); if (data.userId === context.userId && data.blocked) throw new Error("Você não pode bloquear a si mesmo."); const { error } = await context.supabase.from("profiles").update({ blocked: data.blocked }).eq("id", data.userId); if (error) throw error; return { ok: true }; });
 export const adminListPendingTransfers = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => { await assertAdmin(context.supabase, context.userId); const { data, error } = await context.supabase.rpc("admin_list_pending_transfers"); if (error) throw error; return data ?? []; });
-export const adminApproveTransfer = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ transactionId: z.string().uuid() }).parse(d)).handler(async ({ context, data }) => { await assertAdmin(context.supabase, context.userId); const { error } = await context.supabase.from("transactions").update({ status: "completed", approved_by: context.userId, approved_at: new Date().toISOString() }).eq("id", data.transactionId); if (error) throw error; return { ok: true }; });
-export const adminRejectTransfer = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ transactionId: z.string().uuid(), reason: z.string().max(300).optional() }).parse(d)).handler(async ({ context, data }) => { await assertAdmin(context.supabase, context.userId); const { error } = await context.supabase.from("transactions").update({ status: "rejected", approved_by: context.userId, approved_at: new Date().toISOString(), rejection_reason: data.reason ?? null }).eq("id", data.transactionId); if (error) throw error; return { ok: true }; });
+export const adminApproveTransfer = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ transactionId: z.string().uuid() }).parse(d)).handler(async ({ context, data }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { data: result, error } = await context.supabase.rpc("admin_resolve_pending_transfer", {
+    p_transaction_id: data.transactionId,
+    p_status: "completed",
+    p_reason: null,
+  });
+  if (error) throw error;
+  return result ?? { ok: true };
+});
+export const adminRejectTransfer = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ transactionId: z.string().uuid(), reason: z.string().max(300).optional() }).parse(d)).handler(async ({ context, data }) => {
+  await assertAdmin(context.supabase, context.userId);
+  const { data: result, error } = await context.supabase.rpc("admin_resolve_pending_transfer", {
+    p_transaction_id: data.transactionId,
+    p_status: "rejected",
+    p_reason: data.reason ?? null,
+  });
+  if (error) throw error;
+  return result ?? { ok: true };
+});
 
 export const adminListSupportProfiles = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   await assertAdmin(context.supabase, context.userId);
