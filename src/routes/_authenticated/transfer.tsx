@@ -29,7 +29,6 @@ export const Route = createFileRoute("/_authenticated/transfer")({
 type TxType = "pix" | "ted" | "doc" | "internal";
 
 function TransferPage() {
-  Route.useSearch();
   const { t } = useI18n();
   const nav = useNavigate();
   const toast = useToast();
