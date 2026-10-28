@@ -36,7 +36,7 @@ function TransferPage() {
   const doTransferEmail = useServerFn(notifyTransfer);
   const pinStatus = useServerFn(getPinStatus);
 
-  const [type, setType] = useState<TxType>(initialType);
+  const [type] = useState<TxType>("internal");
   const [balance, setBalance] = useState(0);
   const [blocked, setBlocked] = useState(false);
   const [kycStatus, setKycStatus] = useState<string>("pending");
@@ -217,15 +217,15 @@ function TransferPage() {
       .from("transactions")
       .insert({
         user_id: s.user.id,
-        type,
+        type: "internal",
         direction: "out",
         amount,
         description: form.description || null,
-        recipient_name: form.recipient_name || null,
-        recipient_bank: form.bank || null,
-        recipient_agencia: form.agencia || null,
-        recipient_account: form.account_number || null,
-        pix_key: type === "pix" ? form.pix_key || null : null,
+        recipient_name: null,
+        recipient_bank: "Chavez Banco",
+        recipient_agencia: null,
+        recipient_account: form.account_number.trim() || null,
+        pix_key: null,
         status: "pending",
       })
       .select("id")
@@ -244,17 +244,16 @@ function TransferPage() {
     await supabase.from("notifications").insert({
       user_id: s.user.id,
       title: "Transferência pendente de aprovação",
-      body: `${form.recipient_name || form.pix_key} — ${formatBRL(amount)}`,
+      body: `Chavez Banco account ${form.account_number.trim()} — ${formatBRL(amount)}`,
     });
 
     setSaving(false);
     toast.push("success", "Transferência enviada para aprovação");
-    doTransferEmail({ data: { amount, kind: type, recipient: form.recipient_name || form.pix_key || undefined } }).catch(() => {});
+    doTransferEmail({ data: { amount, kind: "internal", recipient: form.account_number.trim() } }).catch(() => {});
     nav({ to: "/receipt/$id", params: { id: tx.id } });
   }
 
 
-  const types: TxType[] = ["pix", "ted", "doc", "internal"];
 
   return (
     <div className="space-y-6">
@@ -284,52 +283,14 @@ function TransferPage() {
 
 
 
-      {/* Type selector */}
-      <div className="grid grid-cols-4 gap-2">
-        {types.map((tp) => (
-          <button
-            key={tp}
-            onClick={() => setType(tp)}
-            className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
-              type === tp
-                ? "bg-gradient-primary text-primary-foreground border-transparent shadow-elevated"
-                : "bg-card text-foreground hover:border-primary/30"
-            }`}
-          >
-            {t(`transfer.type.${tp}`)}
-          </button>
-        ))}
+      <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm">
+        <b>Chavez Banco internal transfer</b>
+        <p className="mt-1 text-muted-foreground">Send money only to another Chavez Banco account. The recipient account will be verified before your transfer is accepted.</p>
       </div>
 
       <form onSubmit={submit} className="rounded-2xl border bg-card shadow-card p-5 space-y-3">
-        <Field label={t("transfer.recipient.name")} required value={form.recipient_name} onChange={(v) => up("recipient_name", v)} />
-        {type === "pix" ? (
-          <div className="space-y-2">
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <Field label={t("transfer.pixkey")} required value={form.pix_key} onChange={(v) => up("pix_key", v)} />
-              </div>
-              <button
-                type="button"
-                onClick={() => setScannerOpen(true)}
-                className="rounded-xl border bg-background px-3 py-2.5 text-sm font-semibold hover:border-primary/40 transition"
-                aria-label="Scan QR code"
-                title="Scan QR code"
-              >
-                <Camera className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="text-xs text-muted-foreground">Scan a QR code to automatically fill the PIX payment details.</p>
-          </div>
-        ) : (
-          <>
-            <Field label={t("transfer.bank")} required value={form.bank} onChange={(v) => up("bank", v)} />
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={t("transfer.agencia")} required value={form.agencia} onChange={(v) => up("agencia", v)} />
-              <Field label={t("transfer.account")} required value={form.account_number} onChange={(v) => up("account_number", v)} />
-            </div>
-          </>
-        )}
+        <Field label="Chavez Banco recipient account number" required value={form.account_number} onChange={(v) => up("account_number", v)} />
+        <p className="text-xs text-muted-foreground">Enter the account number exactly as shown in the recipient's Chavez Banco account.</p>
         <Field label={t("transfer.amount")} required inputMode="decimal" value={form.amount} onChange={(v) => up("amount", v)} placeholder="0,00" />
         <Field label={t("transfer.description")} value={form.description} onChange={(v) => up("description", v)} />
 
