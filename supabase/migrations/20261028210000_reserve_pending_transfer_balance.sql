@@ -1,4 +1,6 @@
 -- Reserve funds for outgoing transfers while they await admin approval.
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS balance_reserved boolean NOT NULL DEFAULT false;
+
 -- The balance debit and transaction insert run in the same database transaction.
 CREATE OR REPLACE FUNCTION public.reserve_pending_outgoing_transfer()
 RETURNS trigger
@@ -42,6 +44,7 @@ BEGIN
      SET balance = balance - NEW.amount
    WHERE id = NEW.user_id;
 
+  NEW.balance_reserved := true;
   RETURN NEW;
 END;
 $$;
@@ -100,10 +103,11 @@ BEGIN
      SET status = p_status,
          approved_by = auth.uid(),
          approved_at = now(),
-         rejection_reason = CASE WHEN p_status = 'rejected' THEN NULLIF(left(COALESCE(p_reason, ''), 300), '') ELSE NULL END
+         rejection_reason = CASE WHEN p_status = 'rejected' THEN NULLIF(left(COALESCE(p_reason, ''), 300), '') ELSE NULL END,
+         balance_reserved = false
    WHERE id = p_transaction_id;
 
-  IF p_status = 'rejected' AND v_tx.direction = 'out' THEN
+  IF p_status = 'rejected' AND v_tx.direction = 'out' AND v_tx.balance_reserved THEN
     UPDATE public.profiles
        SET balance = balance + v_tx.amount
      WHERE id = v_tx.user_id;
