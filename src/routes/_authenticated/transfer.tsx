@@ -237,6 +237,10 @@ function TransferPage() {
       return;
     }
 
+    // The database trigger atomically reserves the amount when this pending
+    // outgoing transfer is inserted. Keep the displayed balance in sync.
+    setBalance((current) => Math.max(0, Number((current - amount).toFixed(2))));
+
     await supabase.from("notifications").insert({
       user_id: s.user.id,
       title: "Transferência pendente de aprovação",
