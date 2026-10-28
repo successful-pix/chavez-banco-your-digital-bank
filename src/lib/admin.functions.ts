@@ -71,7 +71,7 @@ export const adminSetBlocked = createServerFn({ method: "POST" }).middleware([re
 export const adminListPendingTransfers = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => { await assertAdmin(context.supabase, context.userId); const { data, error } = await context.supabase.rpc("admin_list_pending_transfers"); if (error) throw error; return data ?? []; });
 export const adminApproveTransfer = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ transactionId: z.string().uuid() }).parse(d)).handler(async ({ context, data }) => {
   await assertAdmin(context.supabase, context.userId);
-  const { data: result, error } = await context.supabase.rpc("admin_resolve_pending_transfer", {
+  const { data: result, error } = await (context.supabase as any).rpc("admin_resolve_pending_transfer", {
     p_transaction_id: data.transactionId,
     p_status: "completed",
     p_reason: null,
@@ -81,7 +81,7 @@ export const adminApproveTransfer = createServerFn({ method: "POST" }).middlewar
 });
 export const adminRejectTransfer = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d) => z.object({ transactionId: z.string().uuid(), reason: z.string().max(300).optional() }).parse(d)).handler(async ({ context, data }) => {
   await assertAdmin(context.supabase, context.userId);
-  const { data: result, error } = await context.supabase.rpc("admin_resolve_pending_transfer", {
+  const { data: result, error } = await (context.supabase as any).rpc("admin_resolve_pending_transfer", {
     p_transaction_id: data.transactionId,
     p_status: "rejected",
     p_reason: data.reason ?? null,
