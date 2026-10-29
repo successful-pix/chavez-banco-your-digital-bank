@@ -30,6 +30,8 @@ type TxType = "pix" | "ted" | "doc" | "internal";
 
 function TransferPage() {
   const { t } = useI18n();
+  const { type } = Route.useSearch();
+  const mode = type === "ted" || type === "doc" ? "bank" : type === "internal" ? "internal" : "pix";
   const nav = useNavigate();
   const toast = useToast();
   const doTransferEmail = useServerFn(notifyTransfer);
@@ -50,6 +52,8 @@ function TransferPage() {
     description: "",
   });
   const [saving, setSaving] = useState(false);
+  const [recipientLookupName, setRecipientLookupName] = useState<string | null>(null);
+  const [lookupState, setLookupState] = useState<"idle" | "checking" | "found" | "not-found" | "error">("idle");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -187,7 +191,40 @@ function TransferPage() {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
+  async function lookupPixRecipient(value: string) {
+    const key = value.trim();
+    setRecipientLookupName(null);
+    if (!key) { setLookupState("idle"); return; }
+    const isEmail = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(key);
+    const digits = key.replace(/\\D/g, "");
+    const isCpf = digits.length === 11;
+    if (!isEmail && !isCpf) { setLookupState("idle"); return; }
+    setLookupState("checking");
+    try {
+      const column = isEmail ? "email" : "cpf";
+      const lookupValue = isEmail ? key.toLowerCase() : digits;
+      const { data, error } = await supabase.rpc("lookup_pix_recipient", {
+        lookup_type: column,
+        lookup_value: lookupValue,
+      });
+      if (error) throw error;
+      const match = Array.isArray(data) ? data[0] : data;
+      if (match?.full_name) {
+        setRecipientLookupName(String(match.full_name));
+        setLookupState("found");
+      } else {
+        setLookupState("not-found");
+      }
+    } catch {
+      setLookupState("error");
+    }
+  }
+
   function validate() {
+    if (mode !== "internal") {
+      toast.push("error", "PIX and bank transfers are not available until the payment provider is connected. No money has been sent.");
+      return null;
+    }
     if (blocked) { toast.push("error", "Sua conta está bloqueada. Contate o suporte."); return null; }
     if (kycStatus !== "approved") { toast.push("error", "Conclua sua verificação KYC antes de transferir."); return null; }
     if (!hasPin) { toast.push("error", "Configure seu PIN de transferência em Segurança."); return null; }
@@ -281,22 +318,61 @@ function TransferPage() {
 
 
 
-      <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm">
-        <b>Chavez Banco internal transfer</b>
-        <p className="mt-1 text-muted-foreground">Send money only to another Chavez Banco account. The recipient account will be verified before your transfer is accepted.</p>
+      <div className="grid grid-cols-3 gap-2">
+        <Link to="/transfer" search={{ type: "pix" }} className={`rounded-xl border p-3 text-center text-sm font-semibold ${mode === "pix" ? "border-primary bg-primary/10 text-primary" : "bg-card"}`}>PIX</Link>
+        <Link to="/transfer" search={{ type: "ted" }} className={`rounded-xl border p-3 text-center text-sm font-semibold ${mode === "bank" ? "border-primary bg-primary/10 text-primary" : "bg-card"}`}>Bank transfer</Link>
+        <Link to="/transfer" search={{ type: "internal" }} className={`rounded-xl border p-3 text-center text-sm font-semibold ${mode === "internal" ? "border-primary bg-primary/10 text-primary" : "bg-card"}`}>Chavez Banco</Link>
       </div>
 
+      {mode !== "internal" && (
+        <div className="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4 text-sm">
+          <b>Provider connection required.</b>
+          <p className="mt-1 text-muted-foreground">You can prepare the recipient details here, but PIX or external bank payments cannot be sent until a payment provider is connected.</p>
+        </div>
+      )}
+
       <form onSubmit={submit} className="rounded-2xl border bg-card shadow-card p-5 space-y-3">
-        <Field label="Chavez Banco recipient account number" required value={form.account_number} onChange={(v) => up("account_number", v)} />
-        <p className="text-xs text-muted-foreground">Enter the account number exactly as shown in the recipient's Chavez Banco account.</p>
+        {mode === "pix" && (
+          <>
+            <label className="block">
+              <span className="text-xs font-semibold text-foreground/80">PIX key type</span>
+              <select value={form.pix_key.includes("@") ? "email" : "cpf"} onChange={(e) => { up("pix_key", ""); setRecipientLookupName(null); setLookupState("idle"); }} className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm">
+                <option value="email">Email</option>
+                <option value="cpf">CPF</option>
+              </select>
+            </label>
+            <Field label={form.pix_key.includes("@") ? "Recipient email" : "Recipient email or CPF"} required value={form.pix_key} onChange={(v) => { up("pix_key", v); lookupPixRecipient(v); }} placeholder="Email or CPF" />
+            {lookupState === "checking" && <p className="text-xs text-muted-foreground">Checking recipient…</p>}
+            {lookupState === "found" && recipientLookupName && <div className="rounded-xl border border-success/30 bg-success/10 p-3 text-sm">Recipient name: <b>{recipientLookupName}</b></div>}
+            {lookupState === "not-found" && <p className="text-xs text-destructive">No matching recipient was found.</p>}
+            {lookupState === "error" && <p className="text-xs text-amber-700">Recipient lookup is unavailable until secure lookup is configured.</p>}
+          </>
+        )}
+        {mode === "bank" && (
+          <>
+            <label className="block">
+              <span className="text-xs font-semibold text-foreground/80">Destination bank</span>
+              <select required value={form.bank} onChange={(e) => up("bank", e.target.value)} className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm">
+                <option value="">Select bank</option>
+                {["Banco do Brasil", "Caixa Econômica Federal", "Itaú", "Bradesco", "Santander Brasil", "Nubank", "Banco Inter", "C6 Bank", "BTG Pactual", "Sicredi", "Sicoob", "Banco Safra", "Mercado Pago", "PicPay", "PagBank"].map((bank) => <option key={bank} value={bank}>{bank}</option>)}
+              </select>
+            </label>
+            <Field label="Recipient full name" required value={form.recipient_name} onChange={(v) => up("recipient_name", v)} />
+            <Field label="Branch / agency" required value={form.agencia} onChange={(v) => up("agencia", v)} />
+            <Field label="Bank account number" required value={form.account_number} onChange={(v) => up("account_number", v)} />
+          </>
+        )}
+        {mode === "internal" && (
+          <>
+            <Field label="Chavez Banco recipient account number" required value={form.account_number} onChange={(v) => up("account_number", v)} />
+            <p className="text-xs text-muted-foreground">Enter the account number exactly as shown in the recipient's Chavez Banco account.</p>
+          </>
+        )}
         <Field label={t("transfer.amount")} required inputMode="decimal" value={form.amount} onChange={(v) => up("amount", v)} placeholder="0,00" />
         <Field label={t("transfer.description")} value={form.description} onChange={(v) => up("description", v)} />
 
-        <button
-          disabled={saving}
-          className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60"
-        >
-          {saving ? t("transfer.saving") : t("transfer.submit")}
+        <button disabled={saving || mode !== "internal"} className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60">
+          {mode !== "internal" ? "Provider setup required" : saving ? t("transfer.saving") : t("transfer.submit")}
         </button>
       </form>
 
