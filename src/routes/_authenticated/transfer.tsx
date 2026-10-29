@@ -196,8 +196,8 @@ function TransferPage() {
     const key = value.trim();
     setRecipientLookupName(null);
     if (!key) { setLookupState("idle"); return; }
-    const isEmail = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(key);
-    const digits = key.replace(/\\D/g, "");
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(key);
+    const digits = key.replace(/\D/g, "");
     const isCpf = digits.length === 11;
     if (!isEmail && !isCpf) { setLookupState("idle"); return; }
     setLookupState("checking");
@@ -252,6 +252,25 @@ function TransferPage() {
     setSaving(true);
     const { data: s } = await supabase.auth.getUser();
     if (!s.user) { setSaving(false); return; }
+
+    if (mode === "pix") {
+      const { data: result, error } = await supabase.rpc("execute_test_pix_transfer", {
+        p_lookup_type: pixKeyType,
+        p_lookup_value: form.pix_key.trim(),
+        p_amount: amount,
+        p_description: form.description || null,
+      });
+      if (error || !Array.isArray(result) || !result[0]?.transaction_id) {
+        setSaving(false);
+        toast.push("error", error?.message || "PIX test transfer failed.");
+        return;
+      }
+      setBalance(Number(result[0].sender_balance));
+      setSaving(false);
+      toast.push("success", "PIX test transfer completed and recipient credited.");
+      nav({ to: "/receipt/$id", params: { id: result[0].transaction_id } });
+      return;
+    }
 
     const { data: tx, error } = await supabase
       .from("transactions")
