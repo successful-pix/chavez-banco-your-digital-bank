@@ -42,7 +42,7 @@ export const notifyTransfer = createServerFn({ method: "POST" })
     const p = await getProfile(context.supabase, context.userId);
     if (!p?.email) return { skipped: true };
     const { emails } = await import("@/lib/email.server");
-    return emails.transfer(p.email, p.full_name ?? "", data.amount, data.kind, data.recipient ?? null);
+    return emails.transferPending(p.email, p.full_name ?? "", data.amount, data.kind, data.recipient ?? null);
   });
 
 export const sendVerificationCode = createServerFn({ method: "POST" })
