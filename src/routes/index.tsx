@@ -25,6 +25,7 @@ export const Route = createFileRoute("/")({
 });
 
 function WomanWithPhone() {
+  const { t } = useI18n();
   return (
     <div className="landing-art relative mx-auto w-full max-w-[560px]" aria-label="Mulher usando o aplicativo Chavez Banco">
       <div className="landing-orb landing-orb-one" />
@@ -104,15 +105,15 @@ function WomanWithPhone() {
           <rect x="30" y="255" width="150" height="66" rx="18" fill="#FFFFFF" />
           <circle cx="59" cy="288" r="17" fill="#E3F8EF" />
           <path d="M51 288 L57 294 L68 281" fill="none" stroke="#16865D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-          <text x="83" y="284" fill="#16315B" fontSize="12" fontWeight="700">PIX simples</text>
-          <text x="83" y="301" fill="#6B7C98" fontSize="10">No seu ritmo</text>
+          <text x="83" y="284" fill="#16315B" fontSize="12" fontWeight="700">{t("landing.art.pix.title")}</text>
+          <text x="83" y="301" fill="#6B7C98" fontSize="10">{t("landing.art.pix.desc")}</text>
         </g>
         <g className="landing-float landing-float-two" filter="url(#soft-shadow)">
           <rect x="365" y="170" width="164" height="65" rx="18" fill="#FFFFFF" />
           <circle cx="394" cy="202" r="17" fill="#EAF1FF" />
           <path d="M394 192 V212 M384 202 H404" stroke="#0B4DBB" strokeWidth="2.5" strokeLinecap="round" />
-          <text x="419" y="198" fill="#16315B" fontSize="11" fontWeight="700">Tudo no app</text>
-          <text x="419" y="214" fill="#6B7C98" fontSize="10">A qualquer hora</text>
+          <text x="419" y="198" fill="#16315B" fontSize="11" fontWeight="700">{t("landing.art.app.title")}</text>
+          <text x="419" y="214" fill="#6B7C98" fontSize="10">{t("landing.art.app.desc")}</text>
         </g>
         <circle cx="132" cy="164" r="5" fill="#F4BC58" className="landing-sparkle" />
         <circle cx="433" cy="294" r="4" fill="#0B4DBB" className="landing-sparkle landing-sparkle-delay" />
@@ -165,7 +166,7 @@ function Landing() {
             <div className="relative z-20 max-w-2xl md:py-8">
               <div className="landing-eyebrow inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold tracking-wide">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                <span>Seu dinheiro. Sua vida. Mais simples.</span>
+                <span>{t("landing.eyebrow")}</span>
               </div>
               <h1 className="mt-6 max-w-2xl text-[2.65rem] font-black leading-[1.04] tracking-[-0.045em] sm:text-6xl lg:text-[4.4rem]">
                 {t("landing.hero.title")}
@@ -183,9 +184,9 @@ function Landing() {
                 </Link>
               </div>
               <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3 text-xs font-medium text-muted-foreground sm:text-sm">
-                <span className="inline-flex items-center gap-2"><span className="landing-check">✓</span> Conta digital</span>
-                <span className="inline-flex items-center gap-2"><span className="landing-check">✓</span> PIX pelo app</span>
-                <span className="inline-flex items-center gap-2"><span className="landing-check">✓</span> Controle na sua mão</span>
+                <span className="inline-flex items-center gap-2"><span className="landing-check">✓</span> {t("landing.benefit.account")}</span>
+                <span className="inline-flex items-center gap-2"><span className="landing-check">✓</span> {t("landing.benefit.pix")}</span>
+                <span className="inline-flex items-center gap-2"><span className="landing-check">✓</span> {t("landing.benefit.control")}</span>
               </div>
               <div className="mt-7 sm:hidden"><LanguageSwitcher /></div>
             </div>
@@ -198,15 +199,15 @@ function Landing() {
         <section className="relative border-t border-border/60 bg-background py-14 sm:py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-2xl text-center">
-              <p className="text-xs font-extrabold uppercase tracking-[.22em] text-primary">Feito para acompanhar você</p>
-              <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Seu banco, do seu jeito.</h2>
-              <p className="mt-4 text-base leading-7 text-muted-foreground">Mais praticidade para cuidar do seu dinheiro, com uma experiência digital pensada para o dia a dia.</p>
+              <p className="text-xs font-extrabold uppercase tracking-[.22em] text-primary">{t("landing.section.eyebrow")}</p>
+              <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">{t("landing.section.title")}</h2>
+              <p className="mt-4 text-base leading-7 text-muted-foreground">{t("landing.section.subtitle")}</p>
             </div>
             <div className="mt-10 grid gap-4 sm:grid-cols-3 sm:gap-5">
               {[
-                { icon: "↗", title: "PIX sem complicação", description: "Envie e receba dinheiro com praticidade, direto pelo aplicativo." },
-                { icon: "◷", title: "Tudo em um só lugar", description: "Consulte suas movimentações e acompanhe sua conta com facilidade." },
-                { icon: "⌑", title: "Segurança em primeiro lugar", description: "Acesse sua conta com recursos de segurança pensados para proteger você." },
+                { icon: "↗", title: t("landing.feature.everyday.title"), description: t("landing.feature.everyday.desc") },
+                { icon: "◷", title: t("landing.feature.all.title"), description: t("landing.feature.all.desc") },
+                { icon: "⌑", title: t("landing.feature.safe.title"), description: t("landing.feature.safe.desc") },
               ].map((feature) => (
                 <article key={feature.title} className="landing-feature rounded-3xl border border-border/70 bg-card p-6 sm:p-7">
                   <div className="landing-feature-icon grid h-12 w-12 place-items-center rounded-2xl text-xl font-black">{feature.icon}</div>
@@ -217,9 +218,9 @@ function Landing() {
             </div>
             <div className="landing-bottom-cta mt-10 flex flex-col items-start justify-between gap-5 rounded-[2rem] p-7 sm:flex-row sm:items-center sm:p-10">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[.2em] text-white/65">Comece hoje</p>
-                <h2 className="mt-2 text-2xl font-black text-white sm:text-3xl">Mais liberdade para o seu dinheiro.</h2>
-                <p className="mt-2 max-w-xl text-sm leading-6 text-white/75">Abra sua conta e descubra uma forma mais simples de cuidar das suas finanças.</p>
+                <p className="text-xs font-bold uppercase tracking-[.2em] text-white/65">{t("landing.bottom.eyebrow")}</p>
+                <h2 className="mt-2 text-2xl font-black text-white sm:text-3xl">{t("landing.bottom.title")}</h2>
+                <p className="mt-2 max-w-xl text-sm leading-6 text-white/75">{t("landing.bottom.subtitle")}</p>
               </div>
               <Link to="/auth" search={{ mode: "signup" }} className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-full bg-white px-6 text-sm font-extrabold text-[#0B4DBB] transition hover:bg-blue-50">
                 {t("landing.cta.primary")} <span className="ml-2" aria-hidden="true">↗</span>
