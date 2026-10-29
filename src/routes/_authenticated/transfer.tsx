@@ -60,6 +60,8 @@ function TransferPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scannerStreamRef = useRef<MediaStream | null>(null);
   const scannerTimerRef = useRef<number | null>(null);
+  const lookupTimerRef = useRef<number | null>(null);
+  const lookupRequestRef = useRef(0);
 
   useEffect(() => {
     (async () => {
@@ -193,6 +195,7 @@ function TransferPage() {
   }
 
   async function lookupPixRecipient(value: string) {
+    const requestId = ++lookupRequestRef.current;
     const key = value.trim();
     setRecipientLookupName(null);
     if (!key) { setLookupState("idle"); return; }
@@ -209,6 +212,7 @@ function TransferPage() {
         lookup_value: lookupValue,
       });
       if (error) throw error;
+      if (requestId !== lookupRequestRef.current) return;
       const match = Array.isArray(data) ? data[0] : data;
       if (match?.full_name) {
         setRecipientLookupName(String(match.full_name));
@@ -216,8 +220,10 @@ function TransferPage() {
       } else {
         setLookupState("not-found");
       }
-    } catch {
+    } catch (error: any) {
+      if (requestId !== lookupRequestRef.current) return;
       setLookupState("error");
+      setRecipientLookupName(error?.message ? String(error.message) : "Recipient lookup failed. Please try again.");
     }
   }
 
@@ -350,11 +356,24 @@ function TransferPage() {
                 <option value="cpf">CPF</option>
               </select>
             </label>
-            <Field label={pixKeyType === "email" ? "Recipient email" : "Recipient CPF"} required value={form.pix_key} onChange={(v) => { up("pix_key", v); setRecipientLookupName(null); lookupPixRecipient(v); }} placeholder={pixKeyType === "email" ? "name@example.com" : "000.000.000-00"} />
+            <Field label={pixKeyType === "email" ? "Recipient email" : "Recipient CPF"} required value={form.pix_key} onChange={(v) => {
+              up("pix_key", v);
+              setRecipientLookupName(null);
+              setLookupState("idle");
+              lookupRequestRef.current += 1;
+              if (lookupTimerRef.current !== null) window.clearTimeout(lookupTimerRef.current);
+              const key = v.trim();
+              const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(key);
+              const validCpf = key.replace(/\D/g, "").length === 11;
+              if (validEmail || validCpf) {
+                setLookupState("checking");
+                lookupTimerRef.current = window.setTimeout(() => { void lookupPixRecipient(v); }, 450);
+              }
+            }} placeholder={pixKeyType === "email" ? "name@example.com" : "000.000.000-00"} />
             {lookupState === "checking" && <p className="text-xs text-muted-foreground">Checking recipient…</p>}
             {lookupState === "found" && recipientLookupName && <div className="rounded-xl border border-success/30 bg-success/10 p-3 text-sm">Recipient name: <b>{recipientLookupName}</b></div>}
             {lookupState === "not-found" && <p className="text-xs text-destructive">No matching recipient was found.</p>}
-            {lookupState === "error" && <p className="text-xs text-amber-700">Recipient lookup is unavailable until secure lookup is configured.</p>}
+            {lookupState === "error" && <p className="text-xs text-amber-700">Recipient lookup failed: {recipientLookupName || "Please try again."}</p>}
           </>
         )}
         {mode === "bank" && (
