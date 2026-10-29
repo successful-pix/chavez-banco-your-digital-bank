@@ -133,6 +133,10 @@ export const emails = {
     send(to, `Transferência ${kind.toUpperCase()} aprovada — ${brl(amount)}`, shell("Transferência aprovada",
       `<p>Olá <b>${name}</b>,</p><p>Sua transferência <b>${kind.toUpperCase()}</b> de <b style="color:#0B4DBB">${brl(amount)}</b>${recipient ? ` para <b>${recipient}</b>` : ""} foi aprovada e concluída.</p>`)),
 
+  transferReceived: (to: string, name: string, amount: number, sender?: string | null) =>
+    send(to, `Transferência recebida — ${brl(amount)}`, shell("Transferência recebida",
+      `<p>Olá <b>${name}</b>,</p><p>Você recebeu uma transferência de <b style="color:#0B4DBB">${brl(amount)}</b>${sender ? ` de <b>${sender}</b>` : ""}. O valor foi creditado na sua conta.</p>`)),
+
   transferRejected: (to: string, name: string, amount: number, kind: string, reason?: string | null) =>
     send(to, `Transferência ${kind.toUpperCase()} rejeitada`, shell("Transferência rejeitada",
       `<p>Olá <b>${name}</b>,</p><p>Sua transferência <b>${kind.toUpperCase()}</b> de <b>${brl(amount)}</b> foi <b style="color:#b91c1c">rejeitada</b>.</p>${reason ? `<p>Motivo: ${reason}</p>` : ""}`)),
