@@ -39,7 +39,8 @@ function TransferPage() {
 
   const [balance, setBalance] = useState(0);
   const [blocked, setBlocked] = useState(false);
-  const [kycStatus, setKycStatus] = useState<string>("pending");
+  const [kycStatus, setKycStatus] = useState<string | null>(null);
+  const [kycLoaded, setKycLoaded] = useState(false);
   const [hasPin, setHasPin] = useState<boolean | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
   const [form, setForm] = useState({
@@ -67,11 +68,28 @@ function TransferPage() {
     (async () => {
       const { data: s } = await supabase.auth.getUser();
       if (!s.user) return;
-      const { data: p } = await supabase.from("profiles").select("balance, blocked, kyc_status").eq("id", s.user.id).maybeSingle();
-      if (p) {
-        setBalance(Number(p.balance));
-        setBlocked(!!(p as any).blocked);
-        setKycStatus((p as any).kyc_status ?? "pending");
+      try {
+        const [{ data: p }, { data: docs }] = await Promise.all([
+          supabase.from("profiles").select("balance, blocked, kyc_status").eq("id", s.user.id).maybeSingle(),
+          supabase.from("kyc_documents").select("status").eq("user_id", s.user.id),
+        ]);
+        if (p) {
+          setBalance(Number(p.balance));
+          setBlocked(!!(p as any).blocked);
+          const profileStatus = String((p as any).kyc_status ?? "pending").toLowerCase();
+          const hasApprovedDocument = (docs ?? []).some((doc: { status: string }) =>
+            ["approved", "verified"].includes(String(doc.status ?? "").toLowerCase())
+          );
+          // A verified document should never trigger the pending KYC banner.
+          setKycStatus(hasApprovedDocument ? "approved" : profileStatus);
+        } else {
+          setKycStatus("pending");
+        }
+      } catch (error) {
+        console.error("Unable to load transfer verification status", error);
+        setKycStatus("pending");
+      } finally {
+        setKycLoaded(true);
       }
       try {
         const ps = await pinStatus();
@@ -233,7 +251,8 @@ function TransferPage() {
       return null;
     }
     if (blocked) { toast.push("error", "Sua conta está bloqueada. Contate o suporte."); return null; }
-    if (kycStatus !== "approved") { toast.push("error", "Conclua sua verificação KYC antes de transferir."); return null; }
+    if (!kycLoaded || kycStatus === null) { toast.push("error", "Aguarde a verificação da sua conta terminar de carregar."); return null; }
+    if (kycStatus !== "approved" && kycStatus !== "verified" && kycStatus !== "complete" && kycStatus !== "completed") { toast.push("error", "Conclua sua verificação KYC antes de transferir."); return null; }
     if (!hasPin) { toast.push("error", "Configure seu PIN de transferência em Segurança."); return null; }
     const amount = Number(form.amount.replace(",", "."));
     if (!isFinite(amount) || amount <= 0) { toast.push("error", "Valor inválido"); return null; }
@@ -331,12 +350,12 @@ function TransferPage() {
           Sua conta foi bloqueada. Entre em contato com o Suporte para desbloqueá-la.
         </div>
       )}
-      {!blocked && kycStatus !== "approved" && (
+      {kycLoaded && !blocked && !["approved", "verified", "complete", "completed"].includes(String(kycStatus ?? "").toLowerCase()) && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm">
-          <b>KYC {kycStatus === "pending" ? "em análise" : kycStatus}.</b> Tempo estimado de análise: até 24 horas. Você poderá transferir após a aprovação.
+          <b>KYC {String(kycStatus ?? "pending").toLowerCase() === "pending" ? "em análise" : kycStatus}.</b> Tempo estimado de análise: até 24 horas. Você poderá transferir após a aprovação.
         </div>
       )}
-      {!blocked && kycStatus === "approved" && hasPin === false && (
+      {kycLoaded && !blocked && ["approved", "verified", "complete", "completed"].includes(String(kycStatus ?? "").toLowerCase()) && hasPin === false && (
         <div className="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4 text-sm">
           <b>PIN de transferência necessário.</b> <Link to="/security" className="underline font-semibold text-primary">Configurar agora</Link> para autorizar transferências.
         </div>
