@@ -15,7 +15,6 @@ export function SplashScreen() {
   useEffect(() => {
     let cancelled = false;
     let fadeTimer = 0;
-    let hideTimer = 0;
     let welcomeTimer = 0;
 
     const start = async () => {
@@ -50,7 +49,6 @@ export function SplashScreen() {
       cancelled = true;
       window.clearTimeout(welcomeTimer);
       window.clearTimeout(fadeTimer);
-      window.clearTimeout(hideTimer);
     };
   }, [navigate]);
 
