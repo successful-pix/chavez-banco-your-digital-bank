@@ -30,8 +30,8 @@ type TxType = "pix" | "ted" | "doc" | "internal";
 
 function TransferPage() {
   const { t } = useI18n();
-  Route.useSearch();
-  const mode = "pix";
+  const { type } = Route.useSearch();
+  const mode: "pix" | "bank" | "internal" = type === "ted" || type === "doc" ? "bank" : type === "internal" ? "internal" : "pix";
   const nav = useNavigate();
   const toast = useToast();
   const doTransferEmail = useServerFn(notifyTransfer);
@@ -52,6 +52,7 @@ function TransferPage() {
     description: "",
   });
   const [saving, setSaving] = useState(false);
+  const [pixKeyType, setPixKeyType] = useState<"email" | "cpf">("email");
   const [recipientLookupName, setRecipientLookupName] = useState<string | null>(null);
   const [lookupState, setLookupState] = useState<"idle" | "checking" | "found" | "not-found" | "error">("idle");
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -222,7 +223,7 @@ function TransferPage() {
 
   function validate() {
     if (mode !== "internal") {
-      toast.push("error", "PIX transfers are currently unavailable. No money has been sent.");
+      toast.push("error", "External PIX and bank transfers need a transfer network connection. No money has been sent.");
       return null;
     }
     if (blocked) { toast.push("error", "Sua conta está bloqueada. Contate o suporte."); return null; }
@@ -314,17 +315,22 @@ function TransferPage() {
           <b>PIN de transferência necessário.</b> <Link to="/security" className="underline font-semibold text-primary">Configurar agora</Link> para autorizar transferências.
         </div>
       )}
+      <div className="grid grid-cols-3 gap-2 rounded-2xl border bg-card p-2">
+        <Link to="/transfer" search={{ type: "pix" }} className={`rounded-xl px-2 py-3 text-center text-xs font-bold ${mode === "pix" ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}>PIX</Link>
+        <Link to="/transfer" search={{ type: "ted" }} className={`rounded-xl px-2 py-3 text-center text-xs font-bold ${mode === "bank" ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}>Bank transfer</Link>
+        <Link to="/transfer" search={{ type: "internal" }} className={`rounded-xl px-2 py-3 text-center text-xs font-bold ${mode === "internal" ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}>Chavez Banco</Link>
+      </div>
       <form onSubmit={submit} className="rounded-2xl border bg-card shadow-card p-5 space-y-3">
         {mode === "pix" && (
           <>
             <label className="block">
               <span className="text-xs font-semibold text-foreground/80">PIX key type</span>
-              <select value={form.pix_key.includes("@") ? "email" : "cpf"} onChange={(e) => { up("pix_key", ""); setRecipientLookupName(null); setLookupState("idle"); }} className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm">
+              <select value={pixKeyType} onChange={(e) => { setPixKeyType(e.target.value as "email" | "cpf"); up("pix_key", ""); setRecipientLookupName(null); setLookupState("idle"); }} className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm">
                 <option value="email">Email</option>
                 <option value="cpf">CPF</option>
               </select>
             </label>
-            <Field label={form.pix_key.includes("@") ? "Recipient email" : "Recipient email or CPF"} required value={form.pix_key} onChange={(v) => { up("pix_key", v); lookupPixRecipient(v); }} placeholder="Email or CPF" />
+            <Field label={pixKeyType === "email" ? "Recipient email" : "Recipient CPF"} required value={form.pix_key} onChange={(v) => { up("pix_key", v); setRecipientLookupName(null); lookupPixRecipient(v); }} placeholder={pixKeyType === "email" ? "name@example.com" : "000.000.000-00"} />
             {lookupState === "checking" && <p className="text-xs text-muted-foreground">Checking recipient…</p>}
             {lookupState === "found" && recipientLookupName && <div className="rounded-xl border border-success/30 bg-success/10 p-3 text-sm">Recipient name: <b>{recipientLookupName}</b></div>}
             {lookupState === "not-found" && <p className="text-xs text-destructive">No matching recipient was found.</p>}
