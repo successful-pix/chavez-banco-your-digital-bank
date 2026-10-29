@@ -51,24 +51,53 @@ function Dashboard() {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [hidden, setHidden] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [hasApprovedKycDocument, setHasApprovedKycDocument] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      const { data: s } = await supabase.auth.getUser();
-      if (!s.user) return;
-      const [{ data: p }, { data: tx }] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", s.user.id).maybeSingle(),
-        supabase.from("transactions").select("*").eq("user_id", s.user.id).order("created_at", { ascending: false }).limit(8),
+    let alive = true;
+    let profileChannel: ReturnType<typeof supabase.channel> | undefined;
+    let docsChannel: ReturnType<typeof supabase.channel> | undefined;
+
+    const loadDashboard = async (userId: string) => {
+      const [{ data: p }, { data: tx }, { data: docs }] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+        supabase.from("transactions").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(8),
+        supabase.from("kyc_documents").select("status").eq("user_id", userId),
       ]);
+      if (!alive) return;
       if (p) {
         setProfile(p as unknown as Profile);
         if ((p as any).avatar_url) {
           const { data: signed } = await supabase.storage.from("avatars").createSignedUrl((p as any).avatar_url, 3600);
-          setAvatarUrl(signed?.signedUrl ?? null);
+          if (alive) setAvatarUrl(signed?.signedUrl ?? null);
         }
       }
       if (tx) setTxs(tx as unknown as Tx[]);
+      setHasApprovedKycDocument((docs ?? []).some((doc: { status: string }) => {
+        const status = String(doc.status ?? "").toLowerCase();
+        return status === "approved" || status === "verified";
+      }));
+    };
+
+    (async () => {
+      const { data: s } = await supabase.auth.getUser();
+      if (!s.user) return;
+      await loadDashboard(s.user.id);
+      profileChannel = supabase.channel("dashboard-kyc-profile-" + s.user.id)
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles", filter: "id=eq." + s.user.id }, () => {
+          void loadDashboard(s.user!.id);
+        }).subscribe();
+      docsChannel = supabase.channel("dashboard-kyc-docs-" + s.user.id)
+        .on("postgres_changes", { event: "*", schema: "public", table: "kyc_documents", filter: "user_id=eq." + s.user.id }, () => {
+          void loadDashboard(s.user!.id);
+        }).subscribe();
     })();
+
+    return () => {
+      alive = false;
+      if (profileChannel) void supabase.removeChannel(profileChannel);
+      if (docsChannel) void supabase.removeChannel(docsChannel);
+    };
   }, []);
 
   function greet() {
@@ -109,12 +138,12 @@ function Dashboard() {
           <b>Sua conta foi bloqueada.</b> Entre em contato com o Suporte para desbloquear sua conta.
         </div>
       )}
-      {!profile.blocked && profile.kyc_status === "pending" && (
+      {!profile.blocked && !hasApprovedKycDocument && !["approved", "verified", "complete", "completed"].includes(String(profile.kyc_status ?? "").toLowerCase()) && String(profile.kyc_status ?? "").toLowerCase() === "pending" && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm">
           <b>KYC em análise.</b> Tempo estimado: até 24 horas. Após a aprovação todos os serviços serão liberados.
         </div>
       )}
-      {!profile.blocked && profile.kyc_status === "rejected" && (
+      {!profile.blocked && !hasApprovedKycDocument && String(profile.kyc_status ?? "").toLowerCase() === "rejected" && (
         <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
           <b>KYC rejeitado.</b> Reenvie seus documentos na página KYC.
         </div>
