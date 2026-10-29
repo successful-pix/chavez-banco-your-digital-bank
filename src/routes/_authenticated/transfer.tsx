@@ -222,10 +222,6 @@ function TransferPage() {
   }
 
   function validate() {
-    if (mode === "bank") {
-      toast.push("error", "Bank transfers are not enabled in this test build.");
-      return null;
-    }
     if (mode === "pix" && lookupState !== "found") {
       toast.push("error", "Enter a valid PIX email or CPF and confirm the recipient before continuing.");
       return null;
@@ -272,17 +268,18 @@ function TransferPage() {
       return;
     }
 
+    const isBankTransfer = mode === "bank";
     const { data: tx, error } = await supabase
       .from("transactions")
       .insert({
         user_id: s.user.id,
-        type: "internal",
+        type: isBankTransfer ? type : "internal",
         direction: "out",
         amount,
         description: form.description || null,
-        recipient_name: null,
-        recipient_bank: "Chavez Banco",
-        recipient_agencia: null,
+        recipient_name: isBankTransfer ? form.recipient_name.trim() : null,
+        recipient_bank: isBankTransfer ? form.bank : "Chavez Banco",
+        recipient_agencia: isBankTransfer ? form.agencia.trim() : null,
         recipient_account: form.account_number.trim() || null,
         pix_key: null,
         status: "pending",
@@ -303,12 +300,12 @@ function TransferPage() {
     await supabase.from("notifications").insert({
       user_id: s.user.id,
       title: "Transferência pendente de aprovação",
-      body: `Chavez Banco account ${form.account_number.trim()} — ${formatBRL(amount)}`,
+      body: `${isBankTransfer ? `${form.bank} — ${form.recipient_name.trim()} — ${form.account_number.trim()}` : `Chavez Banco account ${form.account_number.trim()}`} — ${formatBRL(amount)}`,
     });
 
     setSaving(false);
-    toast.push("success", "Transferência enviada para aprovação");
-    doTransferEmail({ data: { amount, kind: "internal", recipient: form.account_number.trim() } }).catch(() => {});
+    toast.push("success", isBankTransfer ? "Bank transfer request submitted for approval." : "Transferência enviada para aprovação");
+    doTransferEmail({ data: { amount, kind: isBankTransfer ? type : "internal", recipient: isBankTransfer ? form.bank : form.account_number.trim() } }).catch(() => {});
     nav({ to: "/receipt/$id", params: { id: tx.id } });
   }
 
@@ -383,8 +380,8 @@ function TransferPage() {
         <Field label={t("transfer.amount")} required inputMode="decimal" value={form.amount} onChange={(v) => up("amount", v)} placeholder="0,00" />
         <Field label={t("transfer.description")} value={form.description} onChange={(v) => up("description", v)} />
 
-        <button disabled={saving || mode === "bank"} className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60">
-          {mode === "bank" ? "Bank transfer unavailable" : saving ? t("transfer.saving") : mode === "pix" ? "Continue PIX transfer" : t("transfer.submit")}
+        <button disabled={saving} className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60">
+          {saving ? t("transfer.saving") : mode === "pix" ? "Continue PIX transfer" : mode === "bank" ? "Continue bank transfer" : t("transfer.submit")}
         </button>
       </form>
 
