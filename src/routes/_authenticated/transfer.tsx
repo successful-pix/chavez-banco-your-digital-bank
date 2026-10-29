@@ -37,7 +37,14 @@ function TransferPage() {
   const doTransferEmail = useServerFn(notifyTransfer);
   const pinStatus = useServerFn(getPinStatus);
 
-  const [balance, setBalance] = useState(0);
+  // Keep the last known balance visible while the fresh account balance loads.
+  const [balance, setBalance] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const cached = window.sessionStorage.getItem("chavez-transfer-balance");
+    if (cached === null) return null;
+    const value = Number(cached);
+    return Number.isFinite(value) ? value : null;
+  });
   const [blocked, setBlocked] = useState(false);
   const [kycStatus, setKycStatus] = useState<string | null>(null);
   const [kycLoaded, setKycLoaded] = useState(false);
@@ -74,7 +81,11 @@ function TransferPage() {
           supabase.from("kyc_documents").select("status").eq("user_id", s.user.id),
         ]);
         if (p) {
-          setBalance(Number(p.balance));
+          const freshBalance = Number(p.balance);
+          if (Number.isFinite(freshBalance)) {
+            setBalance(freshBalance);
+            if (typeof window !== "undefined") window.sessionStorage.setItem("chavez-transfer-balance", String(freshBalance));
+          }
           setBlocked(!!(p as any).blocked);
           const profileStatus = String((p as any).kyc_status ?? "pending").toLowerCase();
           const hasApprovedDocument = (docs ?? []).some((doc: { status: string }) =>
@@ -286,7 +297,9 @@ function TransferPage() {
         toast.push("error", error?.message || "PIX transfer could not be submitted.");
         return;
       }
-      setBalance(Number(result[0].sender_balance));
+      const updatedBalance = Number(result[0].sender_balance);
+      setBalance(updatedBalance);
+      if (typeof window !== "undefined" && Number.isFinite(updatedBalance)) window.sessionStorage.setItem("chavez-transfer-balance", String(updatedBalance));
       setSaving(false);
       toast.push("success", "PIX transfer request submitted for approval.");
       nav({ to: "/receipt/$id", params: { id: result[0].transaction_id } });
@@ -320,7 +333,11 @@ function TransferPage() {
 
     // The database trigger atomically reserves the amount when this pending
     // outgoing transfer is inserted. Keep the displayed balance in sync.
-    setBalance((current) => Math.max(0, Number((current - amount).toFixed(2))));
+    setBalance((current) => {
+      const updatedBalance = Math.max(0, Number(((current ?? 0) - amount).toFixed(2)));
+      if (typeof window !== "undefined") window.sessionStorage.setItem("chavez-transfer-balance", String(updatedBalance));
+      return updatedBalance;
+    });
 
     await supabase.from("notifications").insert({
       user_id: s.user.id,
@@ -341,7 +358,7 @@ function TransferPage() {
       <div>
         <h1 className="text-2xl font-black tracking-tight text-foreground">{t("transfer.title")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {t("dashboard.balance")}: <span className="font-semibold text-foreground">{formatBRL(balance)}</span>
+          {t("dashboard.balance")}: <span className="font-semibold text-foreground">{balance === null ? "Loading balance…" : formatBRL(balance)}</span>
         </p>
       </div>
 
