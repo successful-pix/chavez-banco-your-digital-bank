@@ -226,10 +226,6 @@ function TransferPage() {
       toast.push("error", "Bank transfers are not enabled in this test build.");
       return null;
     }
-    if (mode === "pix") {
-      toast.push("error", "PIX transfers are currently unavailable. No transfer has been completed.");
-      return null;
-    }
     if (mode === "pix" && lookupState !== "found") {
       toast.push("error", "Enter a valid PIX email or CPF and confirm the recipient before continuing.");
       return null;
@@ -271,7 +267,7 @@ function TransferPage() {
       }
       setBalance(Number(result[0].sender_balance));
       setSaving(false);
-      toast.push("success", "PIX test transfer completed and recipient credited.");
+      toast.push("success", "PIX transfer submitted successfully.");
       nav({ to: "/receipt/$id", params: { id: result[0].transaction_id } });
       return;
     }
@@ -387,8 +383,8 @@ function TransferPage() {
         <Field label={t("transfer.amount")} required inputMode="decimal" value={form.amount} onChange={(v) => up("amount", v)} placeholder="0,00" />
         <Field label={t("transfer.description")} value={form.description} onChange={(v) => up("description", v)} />
 
-        <button disabled={saving || mode === "bank" || mode === "pix"} className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60">
-          {mode === "bank" ? "Bank transfer unavailable" : mode === "pix" ? "PIX transfers unavailable" : saving ? t("transfer.saving") : t("transfer.submit")}
+        <button disabled={saving || mode === "bank"} className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60">
+          {mode === "bank" ? "Bank transfer unavailable" : saving ? t("transfer.saving") : mode === "pix" ? "Continue PIX transfer" : t("transfer.submit")}
         </button>
       </form>
 
