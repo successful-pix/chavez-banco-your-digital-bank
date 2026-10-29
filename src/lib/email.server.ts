@@ -133,6 +133,10 @@ export const emails = {
     send(to, `Transferência ${kind.toUpperCase()} aprovada — ${brl(amount)}`, shell("Transferência aprovada",
       `<p>Olá <b>${name}</b>,</p><p>Sua transferência <b>${kind.toUpperCase()}</b> de <b style="color:#0B4DBB">${brl(amount)}</b>${recipient ? ` para <b>${recipient}</b>` : ""} foi aprovada e concluída.</p>`)),
 
+  incomingTransferPending: (to: string, name: string, amount: number, sender?: string | null) =>
+    send(to, `Transferência recebida aguardando aprovação — ${brl(amount)}`, shell("Transferência recebida pendente",
+      `<p>Olá <b>${name}</b>,</p><p>Uma transferência de <b>${brl(amount)}</b>${sender ? ` de <b>${sender}</b>` : ""} foi iniciada para sua conta e está aguardando aprovação. O valor ainda não foi creditado.</p>`)),
+
   transferReceived: (to: string, name: string, amount: number, sender?: string | null) =>
     send(to, `Transferência recebida — ${brl(amount)}`, shell("Transferência recebida",
       `<p>Olá <b>${name}</b>,</p><p>Você recebeu uma transferência de <b style="color:#0B4DBB">${brl(amount)}</b>${sender ? ` de <b>${sender}</b>` : ""}. O valor foi creditado na sua conta.</p>`)),
