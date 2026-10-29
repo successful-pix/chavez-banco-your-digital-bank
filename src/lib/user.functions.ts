@@ -42,7 +42,28 @@ export const notifyTransfer = createServerFn({ method: "POST" })
     const p = await getProfile(context.supabase, context.userId);
     if (!p?.email) return { skipped: true };
     const { emails } = await import("@/lib/email.server");
-    return emails.transferPending(p.email, p.full_name ?? "", data.amount, data.kind, data.recipient ?? null);
+    const senderResult = await emails.transferPending(p.email, p.full_name ?? "", data.amount, data.kind, data.recipient ?? null);
+    // Notify an in-app Chavez Banco recipient that a transfer is awaiting approval too.
+    const key = (data.recipient ?? "").trim();
+    if (key) {
+      try {
+        let recipientQuery = context.supabase.from("profiles").select("id,email,full_name").neq("id", context.userId).limit(1);
+        if (/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(key)) {
+          recipientQuery = recipientQuery.ilike("email", key) as any;
+        } else {
+          const digits = key.replace(/\\D/g, "");
+          if (digits.length === 11) recipientQuery = recipientQuery.eq("cpf", digits) as any;
+          else recipientQuery = recipientQuery.eq("account_number", key) as any;
+        }
+        const { data: recipientProfile } = await recipientQuery.maybeSingle();
+        if (recipientProfile?.email) {
+          await emails.incomingTransferPending(recipientProfile.email, recipientProfile.full_name ?? "", data.amount, p.full_name ?? null);
+        }
+      } catch (emailError) {
+        console.error("[email] incoming pending transfer notification failed", emailError);
+      }
+    }
+    return senderResult;
   });
 
 export const sendVerificationCode = createServerFn({ method: "POST" })
