@@ -30,8 +30,8 @@ type TxType = "pix" | "ted" | "doc" | "internal";
 
 function TransferPage() {
   const { t } = useI18n();
-  const { type } = Route.useSearch();
-  const mode = type === "ted" || type === "doc" ? "bank" : type === "internal" ? "internal" : "pix";
+  Route.useSearch();
+  const mode = "pix";
   const nav = useNavigate();
   const toast = useToast();
   const doTransferEmail = useServerFn(notifyTransfer);
@@ -314,23 +314,6 @@ function TransferPage() {
           <b>PIN de transferência necessário.</b> <Link to="/security" className="underline font-semibold text-primary">Configurar agora</Link> para autorizar transferências.
         </div>
       )}
-
-
-
-
-      <div className="grid grid-cols-3 gap-2">
-        <Link to="/transfer" search={{ type: "pix" }} className={`rounded-xl border p-3 text-center text-sm font-semibold ${mode === "pix" ? "border-primary bg-primary/10 text-primary" : "bg-card"}`}>PIX</Link>
-        <Link to="/transfer" search={{ type: "ted" }} className={`rounded-xl border p-3 text-center text-sm font-semibold ${mode === "bank" ? "border-primary bg-primary/10 text-primary" : "bg-card"}`}>Bank transfer</Link>
-        <Link to="/transfer" search={{ type: "internal" }} className={`rounded-xl border p-3 text-center text-sm font-semibold ${mode === "internal" ? "border-primary bg-primary/10 text-primary" : "bg-card"}`}>Chavez Banco</Link>
-      </div>
-
-      {mode !== "internal" && (
-        <div className="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4 text-sm">
-          <b>Provider connection required.</b>
-          <p className="mt-1 text-muted-foreground">You can prepare the recipient details here, but PIX or external bank payments cannot be sent until a payment provider is connected.</p>
-        </div>
-      )}
-
       <form onSubmit={submit} className="rounded-2xl border bg-card shadow-card p-5 space-y-3">
         {mode === "pix" && (
           <>
@@ -372,7 +355,7 @@ function TransferPage() {
         <Field label={t("transfer.description")} value={form.description} onChange={(v) => up("description", v)} />
 
         <button disabled={saving || mode !== "internal"} className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60">
-          {mode !== "internal" ? "Provider setup required" : saving ? t("transfer.saving") : t("transfer.submit")}
+          {mode !== "internal" ? "PIX transfer unavailable" : saving ? t("transfer.saving") : t("transfer.submit")}
         </button>
       </form>
 
