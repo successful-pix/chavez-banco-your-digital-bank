@@ -222,7 +222,7 @@ function TransferPage() {
 
   function validate() {
     if (mode !== "internal") {
-      toast.push("error", "PIX and bank transfers are not available until the payment provider is connected. No money has been sent.");
+      toast.push("error", "PIX transfers are currently unavailable. No money has been sent.");
       return null;
     }
     if (blocked) { toast.push("error", "Sua conta está bloqueada. Contate o suporte."); return null; }
