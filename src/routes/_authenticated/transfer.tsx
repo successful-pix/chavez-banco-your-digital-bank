@@ -264,12 +264,12 @@ function TransferPage() {
       });
       if (error || !Array.isArray(result) || !result[0]?.transaction_id) {
         setSaving(false);
-        toast.push("error", error?.message || "PIX test transfer failed.");
+        toast.push("error", error?.message || "PIX transfer could not be submitted.");
         return;
       }
       setBalance(Number(result[0].sender_balance));
       setSaving(false);
-      toast.push("success", "PIX transfer submitted successfully.");
+      toast.push("success", "PIX transfer request submitted for approval.");
       nav({ to: "/receipt/$id", params: { id: result[0].transaction_id } });
       return;
     }
