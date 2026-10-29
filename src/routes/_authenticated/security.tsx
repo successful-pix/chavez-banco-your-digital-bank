@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { PinInput } from "@/components/pin-input";
 import { useToast } from "@/components/toast";
-import { ShieldCheck, KeyRound, RotateCcw } from "lucide-react";
+import { ShieldCheck, KeyRound, RotateCcw, Volume2 } from "lucide-react";
+import { setVoicePaymentAlertsEnabled, speakPaymentReceived, voicePaymentAlertsEnabled } from "@/lib/alerts";
 import {
   getPinStatus,
   setTransferPin,
@@ -41,6 +42,11 @@ function SecurityPage() {
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [voiceAlerts, setVoiceAlerts] = useState(false);
+
+  useEffect(() => {
+    setVoiceAlerts(voicePaymentAlertsEnabled());
+  }, []);
 
   async function refresh() {
     const s = await status();
@@ -197,6 +203,44 @@ function SecurityPage() {
             {loading ? "Salvando..." : mode === "setup" ? "Criar PIN" : mode === "change" ? "Alterar PIN" : "Redefinir PIN"}
           </button>
         </form>
+      </div>
+
+      <div className="rounded-2xl border bg-card shadow-card p-5">
+        <div className="flex items-start gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+            <Volume2 className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-bold text-foreground">Aviso por voz de pagamento</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Announce completed incoming payments aloud: “Payment received in Chavez Banco!” Voice availability depends on your device and browser.
+            </p>
+            <label className="mt-4 flex items-center justify-between gap-3 rounded-xl border p-3">
+              <span className="text-sm font-semibold">Voice payment alerts</span>
+              <input
+                type="checkbox"
+                checked={voiceAlerts}
+                onChange={(e) => {
+                  setVoiceAlerts(e.target.checked);
+                  setVoicePaymentAlertsEnabled(e.target.checked);
+                  if (e.target.checked) speakPaymentReceived(true);
+                  else if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+                }}
+                className="h-5 w-5 accent-primary"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => speakPaymentReceived(true)}
+              className="mt-3 w-full rounded-xl border px-3 py-2.5 text-sm font-semibold hover:bg-accent"
+            >
+              Test voice announcement
+            </button>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Your phone’s media volume controls loudness. Voice alerts work while Chavez Banco is open and connected.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-2xl border bg-card shadow-card p-5">
