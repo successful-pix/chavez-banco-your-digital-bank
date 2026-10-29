@@ -19,6 +19,7 @@ const pt: Dict = {
 
 
   "landing.eyebrow": "Seu dinheiro. Sua vida. Mais simples.",
+  "landing.photo.alt": "Profissional usando o celular em um ambiente de escritório.",
   "landing.benefit.account": "Conta digital",
   "landing.benefit.pix": "PIX pelo app",
   "landing.benefit.control": "Controle na sua mão",
@@ -170,6 +171,7 @@ const en: Dict = {
 
 
   "landing.eyebrow": "Your money. Your life. Made simpler.",
+  "landing.photo.alt": "A professional woman using her phone in an office setting.",
   "landing.benefit.account": "Digital account",
   "landing.benefit.pix": "PIX in the app",
   "landing.benefit.control": "Control in your hands",
