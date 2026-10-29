@@ -112,3 +112,43 @@ export async function fireAlert(opts: { id: string; title?: string; body: string
 
   return true;
 }
+
+
+// Voice payment announcements are opt-in and stored on this device.
+const VOICE_ALERTS_KEY = "chavez.voice-payment-alerts.enabled";
+export function voicePaymentAlertsEnabled() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(VOICE_ALERTS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+export function setVoicePaymentAlertsEnabled(enabled: boolean) {
+  try {
+    window.localStorage.setItem(VOICE_ALERTS_KEY, enabled ? "1" : "0");
+  } catch {
+    // ignore unavailable storage
+  }
+}
+export function speakPaymentReceived(test = false) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+  if (!test && !voicePaymentAlertsEnabled()) return false;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance("Payment received in Chavez Banco!");
+    utterance.lang = "en-US";
+    utterance.volume = 1;
+    utterance.rate = 0.92;
+    utterance.pitch = 1.08;
+    const voices = window.speechSynthesis.getVoices();
+    const femaleVoice = voices.find((voice) =>
+      /female|samantha|victoria|karen|moira|tessa|zira|jenny|aria|ava|susan|google us english/i.test(voice.name)
+    ) ?? voices.find((voice) => voice.lang.toLowerCase().startsWith("en"));
+    if (femaleVoice) utterance.voice = femaleVoice;
+    window.speechSynthesis.speak(utterance);
+    return true;
+  } catch {
+    return false;
+  }
+}
