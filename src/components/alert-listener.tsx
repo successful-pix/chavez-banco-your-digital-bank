@@ -10,6 +10,7 @@ import {
   clearAlertCache,
   notificationPromptDismissed,
   dismissNotificationPrompt,
+  speakPaymentReceived,
 } from "@/lib/alerts";
 import { formatBRL } from "@/lib/currency";
 
@@ -175,7 +176,10 @@ export function AlertListener() {
 
       fireAlert({ id: alert.id, body: `${alert.title} — ${alert.message}`, url: alert.url }).then(
         (fired) => {
-          if (fired) push(alert);
+          if (fired) {
+            push(alert);
+            if (isCredit) speakPaymentReceived();
+          }
         },
       );
     };
