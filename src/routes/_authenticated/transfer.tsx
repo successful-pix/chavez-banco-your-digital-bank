@@ -222,8 +222,12 @@ function TransferPage() {
   }
 
   function validate() {
-    if (mode !== "internal") {
-      toast.push("error", "External PIX and bank transfers need a transfer network connection. No money has been sent.");
+    if (mode === "bank") {
+      toast.push("error", "Bank transfers are not enabled in this test build.");
+      return null;
+    }
+    if (mode === "pix" && lookupState !== "found") {
+      toast.push("error", "Enter a valid PIX email or CPF and confirm the recipient before continuing.");
       return null;
     }
     if (blocked) { toast.push("error", "Sua conta está bloqueada. Contate o suporte."); return null; }
@@ -360,8 +364,8 @@ function TransferPage() {
         <Field label={t("transfer.amount")} required inputMode="decimal" value={form.amount} onChange={(v) => up("amount", v)} placeholder="0,00" />
         <Field label={t("transfer.description")} value={form.description} onChange={(v) => up("description", v)} />
 
-        <button disabled={saving || mode !== "internal"} className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60">
-          {mode !== "internal" ? "PIX transfer unavailable" : saving ? t("transfer.saving") : t("transfer.submit")}
+        <button disabled={saving || mode === "bank"} className="w-full rounded-xl bg-gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60">
+          {mode === "bank" ? "Bank transfer unavailable" : saving ? t("transfer.saving") : mode === "pix" ? "Continue PIX test transfer" : t("transfer.submit")}
         </button>
       </form>
 
