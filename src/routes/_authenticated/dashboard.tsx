@@ -158,8 +158,8 @@ function Dashboard() {
       <div className="grid grid-cols-4 gap-3">
         {[
           { to: "/transfer", search: { type: "pix" }, icon: Zap, label: "PIX" },
-          { to: "/transfer", search: { type: "ted" }, icon: Send, label: t("dashboard.qa.transfer") },
-          { to: "/transfer", search: { type: "internal" }, icon: QrCode, label: "Chavez Banco" },
+          { to: "/transfer", search: { type: "pix" }, icon: Send, label: t("dashboard.qa.transfer") },
+          { to: "/transfer", search: { type: "pix" }, icon: QrCode, label: "Chavez Banco" },
           { to: "/cards", search: undefined, icon: CreditCard, label: t("dashboard.qa.cards") },
         ].map(({ to, search, icon: Icon, label }) => (
           <Link
