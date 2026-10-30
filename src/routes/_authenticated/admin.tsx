@@ -117,14 +117,33 @@ function UsersTab() {
   const [admins, setAdmins] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
 
   async function refresh() {
-    const [u, r] = await Promise.all([listUsers(), listRoles()]);
-    setRows(u as unknown as UserRow[]);
-    setAdmins(new Set((r as any[]).filter((x) => x.role === "admin").map((x) => x.user_id)));
+    setLoadingUsers(true);
+    setUsersError(null);
+    try {
+      const [u, r] = await Promise.all([listUsers(), listRoles()]);
+      setRows((u as unknown as UserRow[]).map((user) => ({
+        ...user,
+        kyc_status: String(user.kyc_status || "pending").toLowerCase(),
+      })));
+      setAdmins(new Set((r as any[]).filter((x) => x.role === "admin").map((x) => x.user_id)));
+    } catch (error: any) {
+      setUsersError(error?.message || "Não foi possível atualizar os usuários.");
+      throw error;
+    } finally {
+      setLoadingUsers(false);
+    }
   }
 
-  useEffect(() => { refresh().catch(() => {}); }, []);
+  useEffect(() => {
+    void refresh().catch(() => {});
+    const onFocus = () => { void refresh().catch(() => {}); };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -308,7 +327,7 @@ function KycTab() {
     const notes = status === "rejected" ? prompt("Motivo da rejeição?") ?? undefined : undefined;
     try {
       await setStatus({ data: { docId: row.id, userId: row.user_id, status, notes } });
-      toast.push("success", "Atualizado");
+      toast.push("success", status === "approved" ? "KYC aprovado e status do usuário atualizado" : "KYC rejeitado e status do usuário atualizado");
       await refresh();
     } catch (e: any) {
       toast.push("error", e.message);
