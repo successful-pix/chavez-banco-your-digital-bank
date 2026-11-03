@@ -60,7 +60,7 @@ function Dashboard() {
 
     const loadDashboard = async (userId: string) => {
       const [{ data: p }, { data: tx }, { data: docs }] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+        supabase.from("profiles").select("id,full_name,agencia,account_number,pix_key,balance,swift,account_type,country,currency,avatar_url,kyc_status,blocked").eq("id", userId).maybeSingle(),
         supabase.from("transactions").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(8),
         supabase.from("kyc_documents").select("status").eq("user_id", userId),
       ]);
