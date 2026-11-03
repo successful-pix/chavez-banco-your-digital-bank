@@ -128,7 +128,7 @@ export const resetTransferPin = createServerFn({ method: "POST" })
     if (!prof.verification_code || prof.verification_code !== data.otp.trim()) {
       return { ok: false, error: "invalid_otp" };
     }
-    if (prof.verification_expires_at && new Date(prof.verification_expires_at) < new Date()) {
+    if (!prof.verification_expires_at || new Date(prof.verification_expires_at).getTime() <= Date.now()) {
       return { ok: false, error: "expired_otp" };
     }
     const salt = new Uint8Array(16);
