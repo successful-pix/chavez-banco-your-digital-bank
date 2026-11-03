@@ -71,7 +71,9 @@ export const sendVerificationCode = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const p = await getProfile(context.supabase, context.userId);
     if (!p?.email) return { ok: false, error: "no email" };
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const random = new Uint32Array(1);
+    crypto.getRandomValues(random);
+    const code = String(100000 + (random[0] % 900000));
     const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error: saveError } = await supabaseAdmin
@@ -116,7 +118,7 @@ export const verifyCode = createServerFn({ method: "POST" })
     if (!row.verification_code || row.verification_code !== data.code.trim()) {
       return { ok: false, error: "invalid" };
     }
-    if (row.verification_expires_at && new Date(row.verification_expires_at) < new Date()) {
+    if (!row.verification_expires_at || new Date(row.verification_expires_at).getTime() <= Date.now()) {
       return { ok: false, error: "expired" };
     }
     await supabaseAdmin
