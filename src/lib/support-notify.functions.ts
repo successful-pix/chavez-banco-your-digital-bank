@@ -26,13 +26,22 @@ export const notifySupportTeam = createServerFn({ method: "POST" })
       .eq("id", context.userId)
       .maybeSingle();
 
-    const { data: adminEmails, error: adminEmailError } = await context.supabase.rpc("get_support_admin_emails");
-    if (adminEmailError) {
-      console.error("[email] admin recipient lookup", adminEmailError);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: adminRoles, error: rolesError } = await supabaseAdmin
+      .from("user_roles").select("user_id").eq("role", "admin");
+    if (rolesError) {
+      console.error("[email] admin recipient lookup", rolesError);
       return { ok: false as const };
     }
-
-    const recipients = Array.from(new Set((Array.isArray(adminEmails) ? adminEmails : []).filter((email): email is string => typeof email === "string" && email.trim().length > 0).map((email) => email.trim().toLowerCase())));
+    const adminIds = (adminRoles ?? []).map((role) => role.user_id).filter(Boolean);
+    if (adminIds.length === 0) return { skipped: "no-admin-recipients" as const };
+    const { data: adminProfiles, error: profilesError } = await supabaseAdmin
+      .from("profiles").select("email").in("id", adminIds).not("email", "is", null);
+    if (profilesError) {
+      console.error("[email] admin profile lookup", profilesError);
+      return { ok: false as const };
+    }
+    const recipients = Array.from(new Set((adminProfiles ?? []).map((profile) => profile.email).filter((email): email is string => typeof email === "string" && email.trim().length > 0).map((email) => email.trim().toLowerCase())));
     if (recipients.length === 0) return { skipped: "no-admin-recipients" as const };
 
     notified.add(data.messageId);
